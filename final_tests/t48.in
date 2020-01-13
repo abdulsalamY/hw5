@@ -1,0 +1,11 @@
+//test
+enum myEnum {a, c};
+enum myEnum2 {d, e};
+
+void main()
+{
+    int x = 4;
+    byte y = 100 b;
+	enum myEnum z = a;
+	if ((int) z == (int) a) print("ok");
+}

@@ -1,0 +1,11 @@
+//test
+enum myEnum {};
+void myFun() {
+	enum myEnum2 {d, e, f};
+}
+
+void main()
+{
+    int x = 4;
+    byte y = 100 b;
+}

@@ -1,0 +1,14 @@
+//test
+enum myEnum {a, c};
+void myFun() {
+	if(true) print("cool");
+	enum myEnum2 {d, e, f};
+	enum myEnum z = d;
+}
+
+void main()
+{
+    int x = 4;
+    byte y = 100 b;
+	enum myEnum z = a;
+}

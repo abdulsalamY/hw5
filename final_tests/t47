@@ -1,0 +1,4 @@
+---end scope---
+---end scope---
+enum myEnum2 {d,e,f}
+line 12: variable d is not defined

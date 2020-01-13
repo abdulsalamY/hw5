@@ -1,0 +1,871 @@
+%{
+    #include "parser.hpp"
+	#include"hw3_output.hpp"
+    #include<iostream>
+	#include <vector>
+	#include <string>
+	#include "bp.hpp"
+	#include "handler.hpp"
+    using namespace std;
+
+    int yylex();
+    void yyerror(char const*);
+	extern int yylineno;
+
+	vector<FuncID>* functions;
+	vector<Table>* scopes;
+	int loopsCnt;
+	RegisterManager regs_manager = RegisterManager();
+    CodeBuffer code_buffer = CodeBuffer::instance();
+
+	bool enumDefined(EnumType enum_type);
+    bool identifierDefined(Identifier id);
+    Type getIdType(Identifier id);
+    bool typeMismatch(Type l_type, Type r_type);
+    FuncID getFunc(Identifier id);
+    Type getFuncRetType(Identifier id);
+    void printScope();
+    void OpenScope();
+    void CloseScope();
+    bool enumValueDefined(Identifier enum_id,Identifier value_id);
+	bool functionsContain(Identifier function_id);
+	bool varDefined(Identifier to_find);
+	bool enum_item_exists(Identifier to_find);
+%}
+
+%token VOID ID FALSE TRUE ENUM RETURN IF WHILE BREAK CONTINUE COMMA STRING NUM
+%token INT BYTE BOOL
+%token B
+%token SC
+%right ASSIGN
+%left  OR
+%left  AND
+%left  EQUALITY
+%nonassoc RELATIONAL
+%left ADDITIVE
+%left MULTIPLICATIVE
+%right NOT
+%left LPAREN RPAREN LBRACE RBRACE
+%left ELSE
+
+%%
+
+Program :   M Enums Funcs {
+                printScope();
+                scopes->pop_back();
+                delete scopes;
+                delete functions;
+                code_buffer.printGlobalBuffer();
+                code_buffer.printCodeBuffer();
+            }
+;
+M :
+    {
+        scopes = new vector<Table>();
+        functions = new vector<FuncID>();
+        int loopsCnt = 0;
+        OpenScope();
+		    Formals print_formals = Formals(vector<Formal>(1,Formal(STRINGTYPE,"")));
+		    Formals printi_formals = Formals(vector<Formal>(1,Formal(INTTYPE,"")));
+        functions->push_back(FuncID("print", RetType(VOIDTYPE), print_formals));
+        functions->push_back(FuncID("printi", RetType(VOIDTYPE), printi_formals));
+
+    }
+;
+
+Funcs :	{
+            bool main_declared = false;
+            for(FuncID func: *functions){
+                if(func.getId() == "main"){
+                    if(!func.compareArgs(ExpList())){
+                        output::errorMainMissing();
+                        exit(0);
+                    }
+                    main_declared = true;
+                }
+            }
+            if(!main_declared){
+                output::errorMainMissing();
+                exit(0);
+            }else{
+                if( getFuncRetType(Identifier("main")).type != VOIDTYPE ){
+                        output::errorMainMissing();
+                        exit(0);
+                    }
+            }
+        }
+
+		| FuncDecl Funcs{ }
+;
+
+FuncDecl :  FuncDeclM Statements RBrace {}
+;
+
+FuncDeclM : RetType ID LPAREN Formals RPAREN LBrace{
+        RetType* retType = static_cast<RetType*> ($1);
+        Identifier* function_id = static_cast<Identifier*>($2);
+        Formals* formals = static_cast<Formals*>($4);
+        for(FuncID func: (*functions)){
+            if(func.getId() == function_id->value){
+                output::errorDef(function_id->lineno, function_id->value);
+                exit(0);
+            }
+        }
+				if(identifierDefined(*function_id)){
+					output::errorDef(function_id->lineno, function_id->value);
+					exit(0);
+				}
+
+				for( Formal curr : formals->formals){
+				    if(curr.id.value == function_id->value){
+				        output::errorDef(function_id->lineno, function_id->value);
+                    	exit(0);
+				    }
+				}
+
+        functions->push_back(FuncID(function_id->value, *retType, *formals));
+        scopes->back().insertFormals(*formals);
+        }
+
+LBrace: LBRACE {
+    OpenScope();
+}
+
+RBrace: RBRACE {
+    printScope();
+    CloseScope();
+}
+Enums : {}
+		| EnumDecl Enums{}
+;
+
+EnumDecl : ENUM ID LBRACE EnumeratorList RBRACE SC{
+                Identifier* identifier = static_cast<Identifier*>($2);
+                EnumeratorList* enumerator_list = static_cast<EnumeratorList*>($4);
+                for(Table table: (*scopes)){
+                    if(table.contains(*identifier)){
+                        output::errorDef(identifier->lineno , identifier->value);
+                        exit(0);
+                    }
+                }
+        				if(functionsContain(*identifier)){
+        					output::errorDef(identifier->lineno , identifier->value);
+        					exit(0);
+        				}
+        				if(enumerator_list->contains(Enumerator(identifier->value))){
+        					output::errorDef(identifier->lineno , identifier->value);
+        					exit(0);
+        				}
+                scopes->back().insertEnum(*identifier,*enumerator_list);
+            }
+;
+
+RetType : Type {
+            Type* type = static_cast<Type*>($1);
+            $$ = new RetType(type->type);
+          }
+
+		  | VOID {
+		    $$ = new RetType(VOIDTYPE);
+		  }
+;
+
+Formals :   {
+	            $$ = new Formals();
+            }
+
+		  | FormalsList{
+		   $$ = $1;
+		  }
+;
+
+FormalsList : FormalsDecl {
+                    Formal* formal = static_cast<Formal*>($1);
+                    Formals* formals = new Formals();
+                    formals->insert(*formal);
+                    $$ = formals;
+                }
+
+			  | FormalsDecl COMMA FormalsList{
+			      Formal* formal = static_cast<Formal*>($1);
+			      Formals* formals = static_cast<Formals*>($3);
+			      formals->insert(*formal);
+			      delete formal;
+			      $$ = formals;
+			  }
+;
+
+FormalsDecl : Type ID {
+          Type* type = static_cast<Type*>($1);
+          Identifier* id = static_cast<Identifier*>($2);
+					if(functionsContain(*id)){
+						output::errorDef(id->lineno , id->value);
+						exit(0);
+					}
+					if(identifierDefined(*id)){
+	                    output::errorDef(id->lineno , id->value);
+						exit(0);
+					}
+          Formal* formal = new Formal(type->type, id->value);
+          $$ = formal;
+        }
+
+			  | EnumType ID {
+          EnumType* type = static_cast<EnumType*>($1);
+          Identifier* id = static_cast<Identifier*>($2);
+					if(functionsContain(*id)){
+						output::errorDef(id->lineno , id->value);
+						exit(0);
+					}
+          if(!(*scopes)[0].containsEnum(type->enum_id)){
+              output::errorUndefEnum(type->enum_id.lineno, type->enum_id.value);
+              exit(0);
+          }
+          Formal* formal = new Formal(type->type, id->value, type->enum_id.value);
+          $$ = formal;
+			  }
+;
+
+EnumeratorList: Enumerator {
+                    Enumerator* enumerator = static_cast<Enumerator*>($1);
+                    EnumeratorList* enumerator_list = new EnumeratorList();
+                    enumerator_list->insert(*enumerator);
+                    delete enumerator;
+                    $$ = enumerator_list;
+                }
+
+				| EnumeratorList COMMA Enumerator{
+                    Enumerator* enumerator = static_cast<Enumerator*>($3);
+                    EnumeratorList* enumerator_list = static_cast<EnumeratorList*>($1);
+                    if(enumerator_list->contains(*enumerator)){
+                       output::errorDef(enumerator->lineno , enumerator->value);
+                       exit(0);
+                    }
+                    enumerator_list->insert(*enumerator);
+                    delete enumerator;
+                    $$ = enumerator_list;
+				}
+;
+
+Enumerator: ID {
+        Enumerator* enumerator = static_cast<Enumerator*>($1);
+				Identifier* identifier = static_cast<Identifier*>($1);
+               for(Table table: *scopes){
+                   if(table.contains(*enumerator)){
+                       output::errorDef(enumerator->lineno , enumerator->value);
+                       exit(0);
+                   }
+                }
+				if(functionsContain(*identifier)){
+					output::errorDef(identifier->lineno , identifier->value);
+					exit(0);
+				}
+       $$ = enumerator;
+    }
+;
+
+Statements: Statement { }
+
+			| Statements Statement { }
+;
+
+
+Statement: LBrace Statements RBrace { }
+			| Type ID SC {
+			    Type* type = static_cast<Type*>($1);
+			    Identifier* identifier = static_cast<Identifier*>($2);
+                if(identifierDefined(*identifier)){
+                    output::errorDef(identifier->lineno, identifier->value);
+                    exit(0);
+                }
+				if(functionsContain(*identifier)){
+					output::errorDef(identifier->lineno , identifier->value);
+					exit(0);
+				}
+			    scopes->back().insertIdentifier( Formal(type->type, identifier->value));
+			}
+
+			| EnumType ID SC {
+        EnumType* enum_type = static_cast<EnumType*>($1);
+        Identifier* identifier = static_cast<Identifier*>($2);
+				if(functionsContain(*identifier)){
+					output::errorDef(identifier->lineno , identifier->value);
+					exit(0);
+				}
+        if(identifierDefined(*identifier)){
+            output::errorDef(identifier->lineno, identifier->value);
+            exit(0);
+        }
+        if(!enumDefined(*enum_type)){
+             output::errorUndefEnum( enum_type->enum_id.lineno, enum_type->enum_id.value);
+             exit(0);
+        }
+        scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
+    }
+
+			| EnumDecl { }
+
+			| Type ID ASSIGN Exp SC {
+                Type* type = static_cast<Type*>($1);
+                Identifier* identifier = static_cast<Identifier*>($2);
+                Exp* exp = static_cast<Exp*>($4);
+				if(functionsContain(*identifier)){
+					output::errorDef(identifier->lineno , identifier->value);
+					exit(0);
+				}
+                if(identifierDefined(*identifier)){
+                    output::errorDef(identifier->lineno, identifier->value);
+                    exit(0);
+                }
+                if(exp->id.value != ""){
+                    if(!identifierDefined(exp->id)){
+                        output::errorUndef(exp->id.lineno, exp->id.value);
+                        exit(0);
+                    }
+
+                }
+                if(typeMismatch(*type, exp->type)){
+                    output::errorMismatch(exp->id.lineno);
+                    exit(0);
+                }
+                scopes->back().insertIdentifier( Formal(type->type, identifier->value));
+            }
+
+			| EnumType ID ASSIGN Exp SC {
+                EnumType* enum_type = static_cast<EnumType*>($1);
+                Identifier* identifier = static_cast<Identifier*>($2);
+                Exp* exp = static_cast<Exp*>($4);
+
+                if(!enumDefined(*enum_type)){
+                     output::errorUndefEnum(enum_type->enum_id.lineno, enum_type->enum_id.value);
+                     exit(0);
+                }
+
+        				if(functionsContain(*identifier)){
+        					output::errorDef(identifier->lineno , identifier->value);
+        					exit(0);
+        				}
+                if(identifierDefined(*identifier)){
+                    output::errorDef(identifier->lineno, identifier->value);
+                    exit(0);
+                }
+
+                if( exp->id.value != ""){
+                    if(!(varDefined(exp->id)) && !(enum_item_exists(exp->id))){
+                         output::errorUndef(exp->lineno, exp->id.value);
+                         exit(0);
+                    }
+
+                    if(varDefined(exp->id)){
+                        if(typeMismatch(Type(ENUMTYPE), exp->type)){
+                            output::errorUndefEnumValue(exp->lineno, identifier->value);
+                            exit(0);
+                        }
+                        for(Table table : (*scopes) ){
+                            EnumType exp_enum_type = table.getIdentifierEnumType(exp->id);
+                            if(exp_enum_type.enum_id.value != "no@@"){
+                                if(exp_enum_type.enum_id.value != identifier->value){
+                                    output::errorUndefEnumValue(exp->lineno, identifier->value);
+                                    exit(0);
+                                }
+                            }
+                        }
+                    } else {
+                        if(!enumValueDefined(enum_type->enum_id,exp->id)){
+                            output::errorUndefEnumValue(exp->lineno, identifier->value);
+                            exit(0);
+
+                        }
+                    }
+                }
+                if(typeMismatch(Type(ENUMTYPE), exp->type)){
+                    output::errorUndefEnumValue(exp->lineno, identifier->value);
+                    exit(0);
+                }
+                scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
+            }
+
+			| ID ASSIGN Exp SC {
+                Identifier* identifier = static_cast<Identifier*>($1);
+                Exp* exp = static_cast<Exp*>($3);
+                if(!varDefined(*identifier)){
+                    output::errorUndef(identifier->lineno, identifier->value);
+                    exit(0);
+                }
+                Type type = getIdType(*identifier);
+                if(type.type == ENUMTYPE){
+                    for(Table table : (*scopes)){
+                        if(table.contains(*identifier)){
+                            EnumType enum_type = table.getIdentifierEnumType(*identifier);
+                            if(varDefined(exp->id)){
+                                if(typeMismatch(Type(ENUMTYPE), exp->type)){
+                                    output::errorUndefEnumValue(exp->lineno, identifier->value);
+                                    exit(0);
+                                }
+                                for(Table table : (*scopes) ){
+                                    EnumType exp_enum_type = table.getIdentifierEnumType(exp->id);
+                                    if(exp_enum_type.enum_id.value != "no@@"){
+                                        if(exp_enum_type.enum_id.value != identifier->value){
+                                            output::errorUndefEnumValue(exp->lineno, identifier->value);
+                                            exit(0);
+                                        }
+                                    }
+                                }
+                            }
+                            else {
+                                if(!enumValueDefined(enum_type.enum_id,exp->id) ){
+                                    output::errorUndefEnumValue(exp->lineno, identifier->value);
+                                    exit(0);
+                                }
+                            }
+                        }
+                    }
+                }
+                if(typeMismatch(type, exp->type)){
+                    output::errorMismatch( exp->type.lineno);
+                    exit(0);
+                }
+			}
+
+			| Call SC { }
+
+			| RETURN SC {
+			    FuncID func = (*functions)[(*functions).size()-1];
+			    Type ret_type = getFuncRetType(Identifier(func.func_name));
+			    if(typeMismatch(ret_type,Type(VOIDTYPE))){
+                    output::errorMismatch(ret_type.lineno);
+                    exit(0);
+			    }
+			}
+
+			| RETURN Exp SC {
+			    Exp* exp = static_cast<Exp*>($2);
+			    FuncID func = (*functions)[(*functions).size()-1];
+			    Type ret_type = getFuncRetType(Identifier(func.func_name));
+			    if(typeMismatch(ret_type,exp->type) || (exp->type.type == VOIDTYPE)){
+                    output::errorMismatch(exp->type.lineno);
+                    exit(0);
+			    }
+			}
+
+			| IF LPAREN BoolExp RPAREN IfOpen Statement  {
+                printScope();
+			    CloseScope();
+			}
+			| IF LPAREN BoolExp RPAREN IfOpen Statement ELSE IfClose ElseOpen Statement {
+                printScope();
+			    CloseScope();
+			}
+			| WHILE LPAREN BoolExp RPAREN WhileOpen Statement {
+			    printScope();
+			    CloseScope();
+			    loopsCnt--;
+			}
+			| BREAK SC {
+			    if(loopsCnt == 0){
+			        output::errorUnexpectedBreak(yylineno);
+			        exit(0);
+			    }
+			}
+			| CONTINUE SC {
+			    if(loopsCnt == 0){
+			        output::errorUnexpectedContinue(yylineno);
+			        exit(0);
+			    }
+			}
+;
+
+BoolExp: Exp {
+                Exp* exp = static_cast<Exp*>($1);
+                if(exp->type.type != BOOLTYPE){
+                    output::errorMismatch(exp->type.lineno);
+                    exit(0);
+                }
+                $$ = $1;
+            }
+IfOpen: {
+            OpenScope();
+        }
+
+IfClose: {
+            printScope();
+            CloseScope();
+        }
+
+ElseOpen: {
+            OpenScope();
+          }
+
+WhileOpen: {
+            OpenScope();
+            loopsCnt++;
+           }
+
+Call: ID LPAREN ExpList RPAREN {
+        Identifier* identifier = static_cast<Identifier*>($1);
+        ExpList* exp_list = static_cast<ExpList*>($3);
+        Type type = getFuncRetType(*identifier);
+        if(type.type == NONETYPE){
+            output::errorUndefFunc(identifier->lineno, identifier->value);
+            exit(0);
+        }
+        FuncID func = getFunc(*identifier);
+        if(!func.compareArgs(*exp_list)){
+            vector<string> func_args = func.getArgs();
+            output::errorPrototypeMismatch(yylineno, identifier->value, func_args);
+            exit(0);
+        }
+        $$ = new Call(type.type);
+      }
+	  | ID LPAREN RPAREN {
+        Identifier* identifier = static_cast<Identifier*>($1);
+        Type type = getFuncRetType(*identifier);
+        if(type.type == NONETYPE){
+            output::errorUndefFunc(identifier->lineno, identifier->value);
+            exit(0);
+        }
+        FuncID func = getFunc(*identifier);
+        if(!func.compareArgs(ExpList())){
+            vector<string> func_args =  func.getArgs();
+            output::errorPrototypeMismatch(yylineno, identifier->value, func_args);
+            exit(0);
+        }
+        $$ = new Call(type.type);
+      }
+;
+
+ExpList: Exp {
+            Exp* exp = static_cast<Exp*>($1);
+            ExpList* exp_list = new ExpList();
+            exp_list->insert(*exp);
+            $$ = exp_list;
+         }
+		 |Exp COMMA ExpList	{
+            Exp* exp = static_cast<Exp*>($1);
+            ExpList* exp_list = static_cast<ExpList*>($3);
+            exp_list->insert(*exp);
+            $$ = exp_list;
+		 }
+;
+
+Type: INT {
+        $$ = new Type(INTTYPE);
+      }
+	  | BYTE {
+	    $$ = new Type(BYTETYPE);
+	  }
+	  | BOOL {
+	    $$ = new Type(BOOLTYPE);
+	  }
+;
+
+EnumType: ENUM ID {
+            Identifier* identifier = static_cast<Identifier*>($2);
+            $$ = new EnumType(identifier->value);
+        }
+;
+
+Exp:  LPAREN Exp RPAREN {
+        Exp* exp = static_cast<Exp*>($2);
+        $$ = exp;
+     }
+	 | Exp MULTIPLICATIVE Exp {
+		Multiplicative* operation = static_cast<Multiplicative*>($2);
+        Exp* exp1 = static_cast<Exp*>($1);
+        Exp* exp2 = static_cast<Exp*>($3);
+        if((exp1->type.type != INTTYPE && exp1->type.type != BYTETYPE)){
+            output::errorMismatch(exp1->type.lineno);
+            exit(0);
+        }
+        if(exp2->type.type != INTTYPE && exp2->type.type != BYTETYPE){
+                    output::errorMismatch(exp2->type.lineno);
+                    exit(0);
+        }
+
+        if(exp1->type.type == INTTYPE || exp2->type.type == INTTYPE){
+            $$ = new Exp(INTTYPE);
+			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, true);
+        } else {
+            $$ = new Exp(BYTETYPE);
+			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, false);
+        }
+	 }
+
+	 | Exp ADDITIVE Exp	{
+		Additive* operation = static_cast<Additive*>($2);
+        Exp* exp1 = static_cast<Exp*>($1);
+        Exp* exp2 = static_cast<Exp*>($3);
+        if((exp1->type.type != INTTYPE && exp1->type.type != BYTETYPE)){
+            output::errorMismatch(exp1->type.lineno);
+            exit(0);
+        }
+        if(exp2->type.type != INTTYPE && exp2->type.type != BYTETYPE){
+                    output::errorMismatch(exp2->type.lineno);
+                    exit(0);
+        }
+        if(exp1->type.type == INTTYPE || exp2->type.type == INTTYPE){
+            $$ = new Exp(INTTYPE);
+			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, true);
+        } else {
+            $$ = new Exp(BYTETYPE);
+			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, false);
+        }
+     }
+	 | ID {
+	    Identifier* identifier = static_cast<Identifier*>($1);
+	    Type type = getIdType(*identifier);
+	    if(type.type == ERRORUNDEFINED){
+            output::errorUndef(identifier->lineno, identifier->value);
+            exit(0);
+	    }
+	    $$ = new Exp(type.type, identifier->value, type.enum_id.value);
+	 }
+	 | Call	{
+	    Call* call = static_cast<Call*>($1);
+	    $$ = new Exp(call->type.type, "", call->type.enum_id.value);
+	 }
+	 | NUM {
+		Num* num = static_cast<Num*>($1);
+	    $$ = new Exp(INTTYPE);
+		$$->reg = init_reg_int(num->num);
+	 }
+	 | NUM B {
+        Num* num = static_cast<Num*>($1);
+        if(num->num > 255 || num->num < 0){
+            output::errorByteTooLarge(num->lineno, to_string(num->num));
+            exit(0);
+        }
+	    $$ = new Exp(BYTETYPE);
+		$$->reg = init_reg_byte(num->num);
+	 }
+	 | STRING {
+	    $$ = new Exp(STRINGTYPE);
+	 }
+	 | TRUE {
+	    $$ = new Exp(BOOLTYPE);
+	 }
+	 | FALSE {
+	    $$ = new Exp(BOOLTYPE);
+	 }
+	 | NOT Exp {
+        Exp* exp = static_cast<Exp*>($2);
+        if(exp->type.type != BOOLTYPE){
+            output::errorMismatch(exp->type.lineno);
+            exit(0);
+        }
+        $$ = new Exp(BOOLTYPE);
+	 }
+	 | Exp AND Exp {
+           Exp* exp1 = static_cast<Exp*>($1);
+           Exp* exp2 = static_cast<Exp*>($3);
+           if(exp1->type.type != BOOLTYPE){
+               output::errorMismatch(exp1->lineno);
+               exit(0);
+           }
+           if(exp2->type.type != BOOLTYPE){
+               output::errorMismatch(exp2->lineno);
+               exit(0);
+           }
+
+           $$ = new Exp(BOOLTYPE);
+     }
+	 | Exp OR Exp {
+             Exp* exp1 = static_cast<Exp*>($1);
+             Exp* exp2 = static_cast<Exp*>($3);
+           if(exp1->type.type != BOOLTYPE){
+               output::errorMismatch(exp1->lineno);
+               exit(0);
+           }
+           if(exp2->type.type != BOOLTYPE){
+               output::errorMismatch(exp2->lineno);
+               exit(0);
+           }
+             $$ = new Exp(BOOLTYPE);
+       }
+	 | Exp RELATIONAL Exp {
+          Exp* exp1 = static_cast<Exp*>($1);
+          Exp* exp2 = static_cast<Exp*>($3);
+        if((exp1->type.type != INTTYPE && exp1->type.type != BYTETYPE) || (exp2->type.type != INTTYPE && exp2->type.type != BYTETYPE)){
+              output::errorMismatch(exp2->type.lineno);
+              exit(0);
+          }
+          $$ = new Exp(BOOLTYPE);
+     }
+	 | Exp EQUALITY Exp	{
+        Exp* exp1 = static_cast<Exp*>($1);
+        Exp* exp2 = static_cast<Exp*>($3);
+        if((exp1->type.type != INTTYPE && exp1->type.type != BYTETYPE) || (exp2->type.type != INTTYPE && exp2->type.type != BYTETYPE)){
+            output::errorMismatch(exp2->type.lineno);
+            exit(0);
+        }
+        $$ = new Exp(BOOLTYPE);
+     }
+
+	 | LPAREN Type RPAREN Exp {
+        Type* type = static_cast<Type*>($2);
+        Exp* exp = static_cast<Exp*>($4);
+        if(type->type != INTTYPE || exp->type.type != ENUMTYPE){
+            output::errorMismatch(exp->lineno);
+            exit(0);
+        }
+        $$ = new Exp(INTTYPE);
+	 }
+;
+
+
+
+
+
+%%
+
+int main()
+{
+    return yyparse();
+}
+bool enumDefined(EnumType enum_type){
+    for (Table table: (*scopes)){
+        if(table.containsEnum(enum_type.enum_id)){
+            return true;
+        }
+    }
+    return false;
+}
+bool identifierDefined(Identifier id){
+    for (Table table: (*scopes)){
+        if(table.contains(id)){
+            return true;
+        }
+    }
+    for (FuncID function: (*functions)){
+        if(function.getId() == id.value){
+            return true;
+        }
+    }
+    return false;
+}
+
+Type getIdType(Identifier id){
+    for (Table table: (*scopes)){
+        if(table.contains(id)){
+            return table.getIdentifierType(id);
+        }
+    }
+    return Type(ERRORUNDEFINED);
+}
+
+
+bool typeMismatch(Type l_type, Type r_type){
+    if(l_type.type == NONETYPE || r_type.type == NONETYPE){
+        return true;
+    }
+    if(l_type.type == r_type.type || (l_type.type == INTTYPE && r_type.type == BYTETYPE)){
+        return false;
+    }
+    return true;
+}
+
+FuncID getFunc(Identifier id){
+    for (FuncID curr_func_id : *functions){
+        if(curr_func_id.func_name == id.value)
+            return curr_func_id;
+    }
+}
+
+Type getFuncRetType(Identifier id){
+    for (FuncID curr_func_id : *functions){
+        if(curr_func_id.func_name == id.value)
+            return Type(curr_func_id.ret_type.type);
+    }
+    return Type(NONETYPE);
+}
+
+
+void OpenScope(){
+    if(scopes->empty()){ //inserting global scope
+        scopes->push_back(Table(0));
+    } else{             // just a new scope with the offset of the last scope
+        scopes->push_back(Table(scopes->back().curr_offset));
+    }
+}
+
+void CloseScope(){
+    scopes->pop_back();
+}
+
+bool enumValueDefined(Identifier enum_id,Identifier value_id){
+    for(Table table:(*scopes)){
+        if(table.EnumTypeHasEnumVal(enum_id,value_id)){
+            return true;
+        }
+    }
+    return false;
+}
+
+string TypeToString(TypeID type){
+    switch(type){
+        case INTTYPE:
+            return "INT";
+        case BOOLTYPE:
+            return "BOOL";
+        case BYTETYPE:
+            return "BYTE";
+        case STRINGTYPE:
+            return "STRING";
+        case ENUMTYPE:
+            return "enum";
+        case VOIDTYPE:
+            return "VOID";
+        case NONETYPE:
+            return "NONE";
+    }
+}
+
+void printScope(){
+    output::endScope();
+    scopes->back().printVariables();
+    if(scopes->size() == 1){
+        for(FuncID func : (*functions)){
+            string retType = TypeToString(func.ret_type.type);
+            vector<string> argTypes = func.getArgs();
+            string funcType = output::makeFunctionType(retType, argTypes);
+            output::printID(func.getId(), 0, funcType);
+        }
+    }
+    scopes->back().printEnums();
+
+}
+bool functionsContain(Identifier function_id){
+	for(FuncID func: (*functions)){
+		if(func.getId() == function_id.value){
+			return true;
+		}
+	}
+	return false;
+}
+
+bool varDefined(Identifier to_find){
+    for(Table curr_table : *scopes ){
+        for (Formal curr_var : curr_table.vars_in_scope_list){
+            if(curr_var.id.value == to_find.value)
+                return true;
+        }
+    }
+    return false;
+}
+
+
+bool enum_item_exists(Identifier to_find){
+    for(Table curr_table : *scopes ){
+        for (Formal curr_var : curr_table.enums_in_scope_list){
+                for (Enumerator curr_item : curr_var.possible_EnumeratorList.enum_values_options)
+                    if(curr_item.value == to_find.value)
+                        return true;
+        }
+    }
+    return false;
+}
+
+void yyerror(char const* s){
+	output::errorSyn(yylineno);
+	exit(0);
+}

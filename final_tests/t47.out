@@ -1,0 +1,4 @@
+---end scope---
+---end scope---
+enum myEnum2 {d,e,f}
+line 12: enum myEnum2 is not defined

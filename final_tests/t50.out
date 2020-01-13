@@ -1,0 +1,9 @@
+---end scope---
+enum myEnum3 {z}
+---end scope---
+---end scope---
+x enum myEnum2 0
+---end scope---
+x enum myEnum2 0
+---end scope---
+line 19: identifier y is already defined

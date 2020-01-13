@@ -1,0 +1,21 @@
+//test
+enum myEnum {a, c};
+enum myEnum2 {d, e};
+void myFun1() {
+	enum myEnum2 x = d;
+	if(true) {
+		enum myEnum3 {z};
+	}
+}
+
+void main()
+{
+    if(true) {
+		enum myEnum2 x = d;
+	}
+	else {
+		enum myEnum3 {x};
+		int y = 7;
+		enum myEnum4 {y};
+	}
+}

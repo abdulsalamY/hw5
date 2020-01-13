@@ -1,0 +1,5 @@
+---end scope---
+---end scope---
+e1 enum myEnum -1
+e2 enum myEnum2 -2
+line 14: prototype mismatch, function myFun expects arguments (enum myEnum,enum myEnum2)
