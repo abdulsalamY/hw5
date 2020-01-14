@@ -51,7 +51,7 @@ continue					return CONTINUE;
 ">"							return RELATIONAL;
 "<"							return RELATIONAL;
 "+"							{
-								yylval = new Addi("+");
+								yylval = new Additive("+");
 								return ADDITIVE;
 							}
 "-"							{

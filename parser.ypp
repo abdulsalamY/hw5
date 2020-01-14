@@ -6,7 +6,11 @@
 	#include <string>
 	#include "bp.hpp"
 	#include "handler.hpp"
+	#include "utilities.hpp"
     using namespace std;
+
+	#define getReg()  RegisterManager::getReg()
+    #define code_buffer CodeBuffer::instance()
 
     int yylex();
     void yyerror(char const*);
@@ -15,8 +19,7 @@
 	vector<FuncID>* functions;
 	vector<Table>* scopes;
 	int loopsCnt;
-	RegisterManager regs_manager = RegisterManager();
-    CodeBuffer code_buffer = CodeBuffer::instance();
+
 
 	bool enumDefined(EnumType enum_type);
     bool identifierDefined(Identifier id);
@@ -69,7 +72,7 @@ M :
 		    Formals printi_formals = Formals(vector<Formal>(1,Formal(INTTYPE,"")));
         functions->push_back(FuncID("print", RetType(VOIDTYPE), print_formals));
         functions->push_back(FuncID("printi", RetType(VOIDTYPE), printi_formals));
-
+        Utilities::initProgram();
     }
 ;
 

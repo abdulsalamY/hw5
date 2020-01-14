@@ -1,10 +1,10 @@
 #include "handler.hpp"
-#include "regs_manager.hpp"
+#include "RegisterManager.hpp"
 #include "bp.hpp"
 #include <iostream>
 
 string handle_operation(string r1, string r2, string op_char, bool is_int){
-    string res = regs_manager.getReg();
+    string res = getReg();
     string bites = "i8";
     if(is_int){
         bites = "i32";
@@ -35,14 +35,14 @@ string handle_operation(string r1, string r2, string op_char, bool is_int){
 
 string init_reg_int(int num){
 
-    string new_reg = regs_manager.getReg();
+    string new_reg = getReg();
     code_buffer.emit(new_reg + " = add i32 0, " + to_string(num));
     return new_reg;
 }
 
 string init_reg_byte(int num){
 
-    string new_reg = regs_manager.getReg();
+    string new_reg = getReg();
     code_buffer.emit(new_reg + " = add i8 0, " + to_string(num));
     return new_reg;
 }
