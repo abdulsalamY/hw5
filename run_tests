@@ -1,8 +1,8 @@
-#!/bin/bash 
+#!/bin/bash
 
 for file in `ls final_tests/ | grep in | cut -d"." -f1`; do
 	echo Running test for $file
-	./hw3 < final_tests/${file}.in > final_tests/${file}
+	./hw5 < final_tests/${file}.in > final_tests/${file}
 	diff final_tests/$file final_tests/${file}.out
  	if [[ $? != 0 ]] 
 		then

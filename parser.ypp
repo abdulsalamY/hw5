@@ -7,10 +7,14 @@
 	#include "bp.hpp"
 	#include "handler.hpp"
 	#include "utilities.hpp"
+	#include "BoolManager.hpp"
     using namespace std;
+
+    #define YYDEBUG 1
 
 	#define getReg()  RegisterManager::getReg()
     #define code_buffer CodeBuffer::instance()
+    #define bool_manager BoolManager::instance()
 
     int yylex();
     void yyerror(char const*);
@@ -19,6 +23,7 @@
 	vector<FuncID>* functions;
 	vector<Table>* scopes;
 	int loopsCnt;
+	abstract_class* global_abstract = new class abstract_class();
 
 
 	bool enumDefined(EnumType enum_type);
@@ -646,9 +651,11 @@ Exp:  LPAREN Exp RPAREN {
 	 }
 	 | TRUE {
 	    $$ = new Exp(BOOLTYPE);
+	    $$->reg = init_reg_bool(true);
 	 }
 	 | FALSE {
 	    $$ = new Exp(BOOLTYPE);
+	    $$->reg = init_reg_bool(false);
 	 }
 	 | NOT Exp {
         Exp* exp = static_cast<Exp*>($2);
@@ -657,6 +664,7 @@ Exp:  LPAREN Exp RPAREN {
             exit(0);
         }
         $$ = new Exp(BOOLTYPE);
+        $$->reg = init_reg_not(exp->reg);
 	 }
 	 | Exp AND Exp {
            Exp* exp1 = static_cast<Exp*>($1);
@@ -672,18 +680,22 @@ Exp:  LPAREN Exp RPAREN {
 
            $$ = new Exp(BOOLTYPE);
      }
-	 | Exp OR Exp {
-             Exp* exp1 = static_cast<Exp*>($1);
-             Exp* exp2 = static_cast<Exp*>($3);
-           if(exp1->type.type != BOOLTYPE){
-               output::errorMismatch(exp1->lineno);
-               exit(0);
-           }
-           if(exp2->type.type != BOOLTYPE){
-               output::errorMismatch(exp2->lineno);
-               exit(0);
-           }
+	 | Exp OR {
+                         Exp* exp1 = static_cast<Exp*>($1);
+                         if(exp1->type.type != BOOLTYPE){
+                             output::errorMismatch(exp1->lineno);
+                             exit(0);
+                         }
+                         global_abstract = bool_manager.handleOr(exp1->reg);
+            }
+     Exp {
+             Exp* exp2 = static_cast<Exp*>($1);
+               if(exp2->type.type != BOOLTYPE){
+                   output::errorMismatch(exp2->lineno);
+                   exit(0);
+               }
              $$ = new Exp(BOOLTYPE);
+             $$->reg = bool_manager.handleOrSecond(global_abstract,exp2->reg);
        }
 	 | Exp RELATIONAL Exp {
           Exp* exp1 = static_cast<Exp*>($1);
@@ -714,8 +726,6 @@ Exp:  LPAREN Exp RPAREN {
         $$ = new Exp(INTTYPE);
 	 }
 ;
-
-
 
 
 
@@ -824,6 +834,7 @@ string TypeToString(TypeID type){
 }
 
 void printScope(){
+    /**
     output::endScope();
     scopes->back().printVariables();
     if(scopes->size() == 1){
@@ -835,6 +846,7 @@ void printScope(){
         }
     }
     scopes->back().printEnums();
+    **/
 
 }
 bool functionsContain(Identifier function_id){
@@ -869,6 +881,7 @@ bool enum_item_exists(Identifier to_find){
 }
 
 void yyerror(char const* s){
+    yydebug = 1;
 	output::errorSyn(yylineno);
 	exit(0);
 }

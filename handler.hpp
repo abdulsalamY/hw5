@@ -17,4 +17,7 @@ string init_reg_int(int num);
 
 string init_reg_byte(int num);
 
+string init_reg_bool(bool value);
+
+string init_reg_not(string reg);
 #endif //ARITHMETIC_LIBRARY_HPP

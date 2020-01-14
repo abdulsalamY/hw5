@@ -2,6 +2,7 @@
 #include "RegisterManager.hpp"
 #include "bp.hpp"
 #include <iostream>
+#include <assert.h>
 
 string handle_operation(string r1, string r2, string op_char, bool is_int){
     string res = getReg();
@@ -44,5 +45,23 @@ string init_reg_byte(int num){
 
     string new_reg = getReg();
     code_buffer.emit(new_reg + " = add i8 0, " + to_string(num));
+    return new_reg;
+}
+
+string init_reg_bool(bool value){
+    string new_reg = getReg();
+    if( value ){
+        code_buffer.emit(new_reg + " = add i1 0, 1");
+    }else{
+        code_buffer.emit(new_reg + " = add i1 0, 0");
+    }
+    return new_reg;
+}
+
+string init_reg_not(string reg){
+
+    //assert(reg != "");
+    string new_reg = getReg();
+    code_buffer.emit(new_reg + " = xor i1 1, " + reg);
     return new_reg;
 }

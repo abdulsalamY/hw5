@@ -14,6 +14,8 @@ using namespace std;
 class abstract_class{
 public:
     int lineno;
+    string header_label;
+    string inner_label;
     string token;
     string reg;
     vector<pair<int,BranchLabelIndex>> true_list;
