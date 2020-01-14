@@ -11,7 +11,18 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f5e21e1b-e6e2-4625-aceb-d925307b72c2" name="Default Changelist" comment="" />
+    <list default="true" id="f5e21e1b-e6e2-4625-aceb-d925307b72c2" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/RegisterManager.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/RegisterManager.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/RegisterManager.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/RegisterManager.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handler.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/handler.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handler.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/handler.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/parser.ypp" beforeDir="false" afterPath="$PROJECT_DIR$/parser.ypp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scanner.lex" beforeDir="false" afterPath="$PROJECT_DIR$/scanner.lex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/utilities.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/utilities.hpp" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -83,10 +94,10 @@
       <screen x="-1920" y="0" width="1920" height="1040" />
     </state>
     <state x="-1230" y="266" key="#com.intellij.refactoring.safeDelete.UnsafeUsagesDialog/0.0.1280.680/-1920.0.1920.1040@-1920.0.1920.1040" timestamp="1578936654717" />
-    <state x="-1180" y="274" key="FileChooserDialogImpl" timestamp="1578955270271">
+    <state x="-1180" y="274" key="FileChooserDialogImpl" timestamp="1578969881548">
       <screen x="-1920" y="0" width="1920" height="1040" />
     </state>
-    <state x="-1180" y="274" key="FileChooserDialogImpl/0.0.1280.680/-1920.0.1920.1040@-1920.0.1920.1040" timestamp="1578955270271" />
+    <state x="-1180" y="274" key="FileChooserDialogImpl/0.0.1280.680/-1920.0.1920.1040@-1920.0.1920.1040" timestamp="1578969881548" />
     <state x="-1304" y="240" key="run.anything.popup" timestamp="1578954109490">
       <screen x="-1920" y="0" width="1920" height="1040" />
     </state>
