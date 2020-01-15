@@ -275,6 +275,18 @@ public:
         return EnumType("no@@");
     }
 
+    int getEnumOffset(const Identifier& id){
+        for (Formal new_enum_type : enums_in_scope_list){
+            int cnt = 0;
+            for(Enumerator item : new_enum_type.possible_EnumeratorList.enum_values_options){
+                if (item.value == id.value)
+                    return cnt;
+                cnt++;
+            }
+        }
+        return -1;
+    }
+
     void printEnums(){
 
         for (Formal curr_enum_type : enums_in_scope_list){
@@ -301,29 +313,48 @@ public:
 class Num : public abstract_class{
 public:
     int num;
-    Num(int num) : num(num) {}
+    explicit Num(int num) : num(num) {}
     Num() = default;
 };
 
 class Call: public abstract_class{
 public:
     Type type;
-    Call(TypeID type) : type(type){    }
+    explicit Call(TypeID type) : type(type){    }
 };
 
 class Additive: public abstract_class{
 public:
-    Additive(string op) : abstract_class(){
+    explicit Additive(string op) : abstract_class(){
         this->token = op;
     }
 };
 
 class Multiplicative: public abstract_class{
 public:
-    Multiplicative(string op) : abstract_class(){
+    explicit Multiplicative(string op) : abstract_class(){
         this->token = op;
     }
 };
 
+class Relational: public abstract_class{
+public:
+    explicit Relational(string op) : abstract_class(){
+        this->token = op;
+    }
+};
+
+class Equality: public Relational{
+public:
+    explicit Equality(string op) : Relational(op){
+    }
+};
+
+class StringToken: public abstract_class{
+public:
+    explicit StringToken(char* str) : abstract_class(){
+        this->token = string(str);
+    }
+};
 #define YYSTYPE abstract_class*
 #endif

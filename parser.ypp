@@ -14,6 +14,7 @@
     #define YYDEBUG 1
 
 	#define getReg()  RegisterManager::getReg()
+    #define getGlobal()  RegisterManager::getGlobal()
     #define code_buffer CodeBuffer::instance()
     #define bool_manager BoolManager::instance()
 
@@ -343,7 +344,7 @@ Statement: LBrace Statements RBrace { }
                     exit(0);
                 }
                 scopes->back().insertIdentifier( Formal(type->type, identifier->value));
-                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg);
+                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
             }
 
 			| EnumType ID ASSIGN Exp SC {
@@ -398,7 +399,7 @@ Statement: LBrace Statements RBrace { }
                     exit(0);
                 }
                 scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
-                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg);
+                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
             }
 
 			| ID ASSIGN Exp SC {
@@ -441,7 +442,7 @@ Statement: LBrace Statements RBrace { }
                     output::errorMismatch( exp->type.lineno);
                     exit(0);
                 }
-                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg);
+                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
 			}
 
 			| Call SC { }
@@ -601,11 +602,10 @@ Exp:  LPAREN Exp RPAREN {
 
         if(exp1->type.type == INTTYPE || exp2->type.type == INTTYPE){
             $$ = new Exp(INTTYPE);
-			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, true);
         } else {
             $$ = new Exp(BYTETYPE);
-			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, false);
         }
+        $$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, exp1->type.type, exp2->type.type);
 	 }
 
 	 | Exp ADDITIVE Exp	{
@@ -622,10 +622,10 @@ Exp:  LPAREN Exp RPAREN {
         }
         if(exp1->type.type == INTTYPE || exp2->type.type == INTTYPE){
             $$ = new Exp(INTTYPE);
-			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, true);
+			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, exp1->type.type, exp2->type.type);
         } else {
             $$ = new Exp(BYTETYPE);
-			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, false);
+			$$->reg = handle_operation(exp1->reg, exp2->reg, operation->token, exp1->type.type, exp2->type.type);
         }
      }
 	 | ID {
@@ -636,11 +636,13 @@ Exp:  LPAREN Exp RPAREN {
             exit(0);
 	    }
 	    $$ = new Exp(type.type, identifier->value, type.enum_id.value);
-	    $$->reg = get_var_as_reg_from_stack(stack_pointer, get_offset_from_id(*identifier));
+
+	    $$->reg = handel_id_reg(identifier, type);
 	 }
 	 | Call	{
 	    Call* call = static_cast<Call*>($1);
 	    $$ = new Exp(call->type.type, "", call->type.enum_id.value);
+	    $$->reg = call->reg;
 	 }
 	 | NUM {
 		Num* num = static_cast<Num*>($1);
@@ -657,8 +659,9 @@ Exp:  LPAREN Exp RPAREN {
 		$$->reg = init_reg_byte(num->num);
 	 }
 	 | STRING {
+        StringToken* str = static_cast<StringToken*>($1);
 	    $$ = new Exp(STRINGTYPE);
-	    //^^^
+	    $$->reg = init_reg_string(str->token)
 	 }
 	 | TRUE {
 	    $$ = new Exp(BOOLTYPE);
@@ -677,21 +680,23 @@ Exp:  LPAREN Exp RPAREN {
         $$ = new Exp(BOOLTYPE);
         $$->reg = init_reg_not(exp->reg);
 	 }
-	 | Exp AND Exp {
-           Exp* exp1 = static_cast<Exp*>($1);
-           Exp* exp2 = static_cast<Exp*>($3);
-           if(exp1->type.type != BOOLTYPE){
-               output::errorMismatch(exp1->lineno);
-               exit(0);
-           }
-           if(exp2->type.type != BOOLTYPE){
-               output::errorMismatch(exp2->lineno);
-               exit(0);
-           }
-
-           $$ = new Exp(BOOLTYPE);
-           //^^ need to make reg with the new value for new exp
-     }
+	 | Exp AND {
+                    Exp* exp1 = static_cast<Exp*>($1);
+                    if(exp1->type.type != BOOLTYPE){
+                        output::errorMismatch(exp1->lineno);
+                        exit(0);
+                    }
+                    global_abstract = bool_manager.handleAnd(exp1->reg);
+               }
+        Exp {
+             Exp* exp2 = static_cast<Exp*>($1);
+               if(exp2->type.type != BOOLTYPE){
+                   output::errorMismatch(exp2->lineno);
+                   exit(0);
+               }
+             $$ = new Exp(BOOLTYPE);
+             $$->reg = bool_manager.handleAndSecond(global_abstract,exp2->reg);
+         }
 	 | Exp OR {
                          Exp* exp1 = static_cast<Exp*>($1);
                          if(exp1->type.type != BOOLTYPE){
@@ -711,23 +716,25 @@ Exp:  LPAREN Exp RPAREN {
        }
 	 | Exp RELATIONAL Exp {
           Exp* exp1 = static_cast<Exp*>($1);
+          Relational* relational = static_cast<Relational*>($2);
           Exp* exp2 = static_cast<Exp*>($3);
         if((exp1->type.type != INTTYPE && exp1->type.type != BYTETYPE) || (exp2->type.type != INTTYPE && exp2->type.type != BYTETYPE)){
               output::errorMismatch(exp2->type.lineno);
               exit(0);
           }
           $$ = new Exp(BOOLTYPE);
-          //^^
+          $$->reg = bool_manager.handleRelational(relational->token, exp1->reg, exp2->reg,  exp1->type.type, exp2->type.type);
      }
 	 | Exp EQUALITY Exp	{
         Exp* exp1 = static_cast<Exp*>($1);
+        Equality* equality = static_cast<Equality*>($2);
         Exp* exp2 = static_cast<Exp*>($3);
         if((exp1->type.type != INTTYPE && exp1->type.type != BYTETYPE) || (exp2->type.type != INTTYPE && exp2->type.type != BYTETYPE)){
             output::errorMismatch(exp2->type.lineno);
             exit(0);
         }
         $$ = new Exp(BOOLTYPE);
-        //^^
+        $$->reg = bool_manager.handleRelational(equality->token, exp1->reg, exp2->reg,  exp1->type.type, exp2->type.type);
      }
 
 	 | LPAREN Type RPAREN Exp {
@@ -738,6 +745,7 @@ Exp:  LPAREN Exp RPAREN {
             exit(0);
         }
         $$ = new Exp(INTTYPE);
+        $$->reg = exp->reg;
 	 }
 ;
 
@@ -894,6 +902,7 @@ bool enum_item_exists(Identifier to_find){
     return false;
 }
 
+
 void yyerror(char const* s){
     yydebug = 1;
 	output::errorSyn(yylineno);
@@ -908,4 +917,19 @@ int get_offset_from_id(Identifier to_find){
         }
     }
     return -1;
+}
+
+handel_id_reg(Identifier* identifier,Type type){
+    int enum_offset = -2;
+    for (Table table: (*scopes)){
+        if(table.contains(identifier)){
+            enum_offset = table.getEnumOffset(*identifier);
+        }
+    }
+    if(enum_offset > -1){
+        return init_reg_enum(enum_offset);
+    }
+    else{
+        return set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
+    }
 }

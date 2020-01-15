@@ -10,6 +10,7 @@
 using namespace std;
 class RegisterManager {
     static int count;
+    static int global_count;
 public:
     RegisterManager() = default;
     /**
@@ -17,6 +18,7 @@ public:
      * @return new register name.
      */
     static string getReg();
+    static string getGlobal();
 };
 
 #endif //HW5_REGISTERMANAGER_HPP

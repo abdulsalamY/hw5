@@ -43,13 +43,31 @@ continue					return CONTINUE;
 ")"							return RPAREN;
 "{"							return LBRACE;
 "}"							return RBRACE;
-"=="						return EQUALITY;
+"=="						{
+                                yylval = new Equality("==");
+                                return EQUALITY;
+                            }
 "="							return ASSIGN;
-"!="						return EQUALITY;
-"<="						return RELATIONAL;
-">="						return RELATIONAL;
-">"							return RELATIONAL;
-"<"							return RELATIONAL;
+"!="						{
+                                yylval = new Equality("!=");
+                                return EQUALITY;
+                            }
+"<="						{
+                                yylval = new Relational("<=");
+                                return RELATIONAL;
+                            }
+">="						{
+                                yylval = new Relational(">=");
+                                return RELATIONAL;
+                            }
+">"							{
+                                yylval = new Relational(">");
+                                return RELATIONAL;
+                            }
+"<"							{
+                                yylval = new Relational("<");
+                                return RELATIONAL;
+                            }
 "+"							{
 								yylval = new Additive("+");
 								return ADDITIVE;
@@ -74,7 +92,11 @@ continue					return CONTINUE;
                                 yylval = new Num(atoi(yytext));
                                 return NUM;
                             }
-\"([^\n\r\"\\]|\\[rnt"\\])+\"	return STRING;
+\"([^\n\r\"\\]|\\[rnt"\\])+\"	{
+                                    yylval = new StringToken(yytext);
+                                    return STRING;
+                                }
+}
 \/\/[^\r\n]*[\r|\n|\r\n]?	;
 {whitespace}				;
 
