@@ -8,6 +8,7 @@
 	#include "handler.hpp"
 	#include "utilities.hpp"
 	#include "BoolManager.hpp"
+	#include "local_vars.hpp"
     using namespace std;
 
     #define YYDEBUG 1
@@ -24,6 +25,7 @@
 	vector<Table>* scopes;
 	int loopsCnt;
 	abstract_class* global_abstract = new class abstract_class();
+    string stack_pointer;
 
 
 	bool enumDefined(EnumType enum_type);
@@ -39,6 +41,7 @@
 	bool functionsContain(Identifier function_id);
 	bool varDefined(Identifier to_find);
 	bool enum_item_exists(Identifier to_find);
+	int get_offset_from_id(Identifier to_find);
 %}
 
 %token VOID ID FALSE TRUE ENUM RETURN IF WHILE BREAK CONTINUE COMMA STRING NUM
@@ -133,6 +136,7 @@ FuncDeclM : RetType ID LPAREN Formals RPAREN LBrace{
 
         functions->push_back(FuncID(function_id->value, *retType, *formals));
         scopes->back().insertFormals(*formals);
+        stack_pointer = init_local_vars_stack();
         }
 
 LBrace: LBRACE {
@@ -291,6 +295,7 @@ Statement: LBrace Statements RBrace { }
 					exit(0);
 				}
 			    scopes->back().insertIdentifier( Formal(type->type, identifier->value));
+			    set_var(stack_pointer,get_offset_from_id(*identifier), 0);
 			}
 
 			| EnumType ID SC {
@@ -309,6 +314,7 @@ Statement: LBrace Statements RBrace { }
              exit(0);
         }
         scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
+        set_var(stack_pointer,get_offset_from_id(*identifier), 0);
     }
 
 			| EnumDecl { }
@@ -337,6 +343,7 @@ Statement: LBrace Statements RBrace { }
                     exit(0);
                 }
                 scopes->back().insertIdentifier( Formal(type->type, identifier->value));
+                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg);
             }
 
 			| EnumType ID ASSIGN Exp SC {
@@ -391,6 +398,7 @@ Statement: LBrace Statements RBrace { }
                     exit(0);
                 }
                 scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
+                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg);
             }
 
 			| ID ASSIGN Exp SC {
@@ -433,6 +441,7 @@ Statement: LBrace Statements RBrace { }
                     output::errorMismatch( exp->type.lineno);
                     exit(0);
                 }
+                set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg);
 			}
 
 			| Call SC { }
@@ -627,6 +636,7 @@ Exp:  LPAREN Exp RPAREN {
             exit(0);
 	    }
 	    $$ = new Exp(type.type, identifier->value, type.enum_id.value);
+	    $$->reg = get_var_as_reg_from_stack(stack_pointer, get_offset_from_id(*identifier));
 	 }
 	 | Call	{
 	    Call* call = static_cast<Call*>($1);
@@ -648,6 +658,7 @@ Exp:  LPAREN Exp RPAREN {
 	 }
 	 | STRING {
 	    $$ = new Exp(STRINGTYPE);
+	    //^^^
 	 }
 	 | TRUE {
 	    $$ = new Exp(BOOLTYPE);
@@ -679,6 +690,7 @@ Exp:  LPAREN Exp RPAREN {
            }
 
            $$ = new Exp(BOOLTYPE);
+           //^^ need to make reg with the new value for new exp
      }
 	 | Exp OR {
                          Exp* exp1 = static_cast<Exp*>($1);
@@ -705,6 +717,7 @@ Exp:  LPAREN Exp RPAREN {
               exit(0);
           }
           $$ = new Exp(BOOLTYPE);
+          //^^
      }
 	 | Exp EQUALITY Exp	{
         Exp* exp1 = static_cast<Exp*>($1);
@@ -714,6 +727,7 @@ Exp:  LPAREN Exp RPAREN {
             exit(0);
         }
         $$ = new Exp(BOOLTYPE);
+        //^^
      }
 
 	 | LPAREN Type RPAREN Exp {
@@ -884,4 +898,14 @@ void yyerror(char const* s){
     yydebug = 1;
 	output::errorSyn(yylineno);
 	exit(0);
+}
+
+int get_offset_from_id(Identifier to_find){
+    for(Table curr_table : *scopes ){
+        for (Formal curr_var : curr_table.vars_in_scope_list){
+            if(curr_var.id.value == to_find.value)
+                return curr_var.offset;
+        }
+    }
+    return -1;
 }
