@@ -96,7 +96,7 @@ continue					return CONTINUE;
                                     yylval = new StringToken(yytext);
                                     return STRING;
                                 }
-}
+
 \/\/[^\r\n]*[\r|\n|\r\n]?	;
 {whitespace}				;
 

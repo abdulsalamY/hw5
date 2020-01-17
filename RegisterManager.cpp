@@ -16,5 +16,5 @@ string RegisterManager::getReg() {
 string RegisterManager::getGlobal() {
     global_count++;
     string ret="@global";
-    return ret.append(to_string(count));
+    return ret.append(to_string(global_count));
 }

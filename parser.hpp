@@ -104,7 +104,8 @@ class Exp : public abstract_class{
 public:
     Type type;
     Identifier id;
-    Exp(TypeID type, string id = "", string enum_id="") : type(type,enum_id), id(id) {}
+    string bool_exp_label;
+    Exp(TypeID type, string id = "", string enum_id="", string bool_exp_label="") : type(type,enum_id), id(id), bool_exp_label(bool_exp_label) {}
 
 };
 
@@ -355,6 +356,15 @@ public:
     explicit StringToken(char* str) : abstract_class(){
         this->token = string(str);
     }
+};
+
+class GenerateLabel: public abstract_class{
+};
+class Statement: public abstract_class{
+};
+class Statements: public abstract_class{
+};
+class MBranch: public abstract_class{
 };
 #define YYSTYPE abstract_class*
 #endif

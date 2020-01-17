@@ -16,9 +16,6 @@
 
 string handle_operation(string r1, string r2, string op_char, TypeID reg1_type, TypeID reg2_type);
 
-/// creates a new register with type
-string init_exp(Exp* id);
-
 string init_reg_int(int num);
 
 string init_reg_byte(int num);
@@ -31,4 +28,5 @@ string init_reg_string(const string& value);
 
 string init_reg_not(string reg);
 
+int handle_bool_exp_jump(Exp exp);
 #endif //HW5_HANDLER_HPP

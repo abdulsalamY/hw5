@@ -9,6 +9,8 @@
 	#include "utilities.hpp"
 	#include "BoolManager.hpp"
 	#include "local_vars.hpp"
+	#include "StatementManager.hpp"
+	#include "FunctionManager.hpp"
     using namespace std;
 
     #define YYDEBUG 1
@@ -17,6 +19,9 @@
     #define getGlobal()  RegisterManager::getGlobal()
     #define code_buffer CodeBuffer::instance()
     #define bool_manager BoolManager::instance()
+    #define statement_manager StatementManager::instance()
+    #define makelist CodeBuffer::makelist
+    #define merge CodeBuffer::merge
 
     int yylex();
     void yyerror(char const*);
@@ -24,6 +29,8 @@
 
 	vector<FuncID>* functions;
 	vector<Table>* scopes;
+    vector<vector<pair<int,BranchLabelIndex>>>* break_next_lists;
+    vector<vector<pair<int,BranchLabelIndex>>>* cont_next_lists;
 	int loopsCnt;
 	abstract_class* global_abstract = new class abstract_class();
     string stack_pointer;
@@ -43,6 +50,7 @@
 	bool varDefined(Identifier to_find);
 	bool enum_item_exists(Identifier to_find);
 	int get_offset_from_id(Identifier to_find);
+	string handle_id_reg(Identifier* identifier,Type type);
 %}
 
 %token VOID ID FALSE TRUE ENUM RETURN IF WHILE BREAK CONTINUE COMMA STRING NUM
@@ -67,6 +75,7 @@ Program :   M Enums Funcs {
                 scopes->pop_back();
                 delete scopes;
                 delete functions;
+                Utilities::initProgram();
                 code_buffer.printGlobalBuffer();
                 code_buffer.printCodeBuffer();
             }
@@ -75,13 +84,14 @@ M :
     {
         scopes = new vector<Table>();
         functions = new vector<FuncID>();
+        break_next_lists = new vector<vector<pair<int,BranchLabelIndex>>>();
+        cont_next_lists = new vector<vector<pair<int,BranchLabelIndex>>>();
         int loopsCnt = 0;
         OpenScope();
-		    Formals print_formals = Formals(vector<Formal>(1,Formal(STRINGTYPE,"")));
-		    Formals printi_formals = Formals(vector<Formal>(1,Formal(INTTYPE,"")));
+        Formals print_formals = Formals(vector<Formal>(1,Formal(STRINGTYPE,"")));
+        Formals printi_formals = Formals(vector<Formal>(1,Formal(INTTYPE,"")));
         functions->push_back(FuncID("print", RetType(VOIDTYPE), print_formals));
         functions->push_back(FuncID("printi", RetType(VOIDTYPE), printi_formals));
-        Utilities::initProgram();
     }
 ;
 
@@ -277,13 +287,37 @@ Enumerator: ID {
     }
 ;
 
-Statements: Statement { }
+Statements: GENLABEL Statement
+            {
+                GenerateLabel* label = static_cast<GenerateLabel*>($1);
+                Statement* statement = static_cast<Statement*>($2);
+                statement->header_label = label->header_label;
+                $$ = new Statements();
+                statement->next_list = merge(statement->next_list,statement_manager.handle_statement());
+                $$->next_list = statement->next_list;
+                $$->header_label = statement->header_label;
+            }
 
-			| Statements Statement { }
+			| Statements GENLABEL Statement
+             {
+                Statements* statements = static_cast<Statements*>($1);
+                GenerateLabel* label = static_cast<GenerateLabel*>($2);
+                Statement* statement = static_cast<Statement*>($3);
+                statement->header_label = label->header_label;
+                $$ = new Statements();
+			    statement->next_list = merge(statement->next_list, statement_manager.handle_statements(label->header_label,statements->next_list));
+			    $$->next_list = statement->next_list;
+			    $$->header_label = statements->header_label;
+             }
 ;
 
 
-Statement: LBrace Statements RBrace { }
+Statement: LBrace Statements RBrace {
+                Statements* statements = static_cast<Statements*>($2);
+                $$ = new Statement();
+                $$->next_list = statements->next_list;
+                $$->header_label = statements->header_label;
+            }
 			| Type ID SC {
 			    Type* type = static_cast<Type*>($1);
 			    Identifier* identifier = static_cast<Identifier*>($2);
@@ -297,28 +331,33 @@ Statement: LBrace Statements RBrace { }
 				}
 			    scopes->back().insertIdentifier( Formal(type->type, identifier->value));
 			    set_var(stack_pointer,get_offset_from_id(*identifier), 0);
+			    $$ = new Statement();
 			}
 
 			| EnumType ID SC {
-        EnumType* enum_type = static_cast<EnumType*>($1);
-        Identifier* identifier = static_cast<Identifier*>($2);
-				if(functionsContain(*identifier)){
-					output::errorDef(identifier->lineno , identifier->value);
-					exit(0);
-				}
-        if(identifierDefined(*identifier)){
-            output::errorDef(identifier->lineno, identifier->value);
-            exit(0);
-        }
-        if(!enumDefined(*enum_type)){
-             output::errorUndefEnum( enum_type->enum_id.lineno, enum_type->enum_id.value);
-             exit(0);
-        }
-        scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
-        set_var(stack_pointer,get_offset_from_id(*identifier), 0);
-    }
+                EnumType* enum_type = static_cast<EnumType*>($1);
+                Identifier* identifier = static_cast<Identifier*>($2);
+                        if(functionsContain(*identifier)){
+                            output::errorDef(identifier->lineno , identifier->value);
+                            exit(0);
+                        }
+                if(identifierDefined(*identifier)){
+                    output::errorDef(identifier->lineno, identifier->value);
+                    exit(0);
+                }
+                if(!enumDefined(*enum_type)){
+                     output::errorUndefEnum( enum_type->enum_id.lineno, enum_type->enum_id.value);
+                     exit(0);
+                }
+                scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
+                set_var(stack_pointer,get_offset_from_id(*identifier), 0);
+                $$ = new Statement();
+            }
 
-			| EnumDecl { }
+			| EnumDecl
+			{
+			    $$ = new Statement();
+			}
 
 			| Type ID ASSIGN Exp SC {
                 Type* type = static_cast<Type*>($1);
@@ -345,6 +384,7 @@ Statement: LBrace Statements RBrace { }
                 }
                 scopes->back().insertIdentifier( Formal(type->type, identifier->value));
                 set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
+                $$ = new Statement();
             }
 
 			| EnumType ID ASSIGN Exp SC {
@@ -357,10 +397,10 @@ Statement: LBrace Statements RBrace { }
                      exit(0);
                 }
 
-        				if(functionsContain(*identifier)){
-        					output::errorDef(identifier->lineno , identifier->value);
-        					exit(0);
-        				}
+                if(functionsContain(*identifier)){
+                    output::errorDef(identifier->lineno , identifier->value);
+                    exit(0);
+                }
                 if(identifierDefined(*identifier)){
                     output::errorDef(identifier->lineno, identifier->value);
                     exit(0);
@@ -400,6 +440,7 @@ Statement: LBrace Statements RBrace { }
                 }
                 scopes->back().insertIdentifier( Formal(enum_type->type, identifier->value, enum_type->enum_id.value));
                 set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
+                $$ = new Statement();
             }
 
 			| ID ASSIGN Exp SC {
@@ -443,9 +484,12 @@ Statement: LBrace Statements RBrace { }
                     exit(0);
                 }
                 set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
+                $$ = new Statement();
 			}
 
-			| Call SC { }
+			| Call SC {
+			    $$ = new Statement();
+			}
 
 			| RETURN SC {
 			    FuncID func = (*functions)[(*functions).size()-1];
@@ -454,6 +498,8 @@ Statement: LBrace Statements RBrace { }
                     output::errorMismatch(ret_type.lineno);
                     exit(0);
 			    }
+			    $$ = new Statement();
+			    statement_manager.handle_return("", VOIDTYPE);
 			}
 
 			| RETURN Exp SC {
@@ -464,43 +510,105 @@ Statement: LBrace Statements RBrace { }
                     output::errorMismatch(exp->type.lineno);
                     exit(0);
 			    }
+                $$ = new Statement();
+                statement_manager.handle_return(exp->reg, exp->type.type);
 			}
 
 			| IF LPAREN BoolExp RPAREN IfOpen Statement  {
                 printScope();
 			    CloseScope();
+			    Exp* bool_exp = static_cast<Exp*>($3);
+				Statement* stat_to_execute = static_cast<Statement*>($6);
+
+                $$ = new Statement();
+
+				code_buffer.bpatch(bool_exp->true_list , stat_to_execute->header_label);
+				$$->next_list = merge(bool_exp->false_list , stat_to_execute->next_list);
+
 			}
 			| IF LPAREN BoolExp RPAREN IfOpen Statement ELSE IfClose ElseOpen Statement {
                 printScope();
 			    CloseScope();
+				Exp* bool_exp = static_cast<Exp*>($3);
+				Statement* stat_to_execute = static_cast<Statement*>($6);
+				Statement* else_to_execute = static_cast<Statement*>($10);
+
+				$$ = new Statement();
+
+				code_buffer.bpatch(bool_exp->true_list , stat_to_execute->header_label);
+				code_buffer.bpatch(bool_exp->false_list , else_to_execute->header_label);
+				$$->next_list = merge(else_to_execute->next_list , stat_to_execute->next_list);
+
 			}
+
 			| WHILE LPAREN BoolExp RPAREN WhileOpen Statement {
+
+				Exp* bool_exp = static_cast<Exp*>($3);
+				Statement* stat_to_execute = static_cast<Statement*>($6);
 			    printScope();
 			    CloseScope();
 			    loopsCnt--;
+
+                $$ = new Statement();
+
+				code_buffer.bpatch(bool_exp->true_list , stat_to_execute->header_label);
+				code_buffer.bpatch(stat_to_execute->next_list , bool_exp->header_label);
+
+                $$->next_list = merge( bool_exp->false_list, $$->next_list);
+                $$->next_list = merge( break_next_lists->back(), $$->next_list);
+                code_buffer.bpatch(cont_next_lists->back() , bool_exp->header_label);
+
+                break_next_lists->pop_back();
+                cont_next_lists->pop_back();
 			}
 			| BREAK SC {
 			    if(loopsCnt == 0){
 			        output::errorUnexpectedBreak(yylineno);
 			        exit(0);
 			    }
+                int location = code_buffer.emit("br label @");
+
+                break_next_lists->back() = merge(code_buffer.makelist({location,FIRST}), break_next_lists->back());
+                $$ = new Statement();
 			}
 			| CONTINUE SC {
 			    if(loopsCnt == 0){
 			        output::errorUnexpectedContinue(yylineno);
 			        exit(0);
 			    }
+                int location = code_buffer.emit("br label @");
+                cont_next_lists->back() = merge(makelist({location,FIRST}), cont_next_lists->back());
+                $$ = new Statement();
 			}
 ;
 
-BoolExp: Exp {
-                Exp* exp = static_cast<Exp*>($1);
+BoolExp: MBranch GENLABEL Exp {
+                MBranch* m_branch = static_cast<MBranch*>($1);
+                GenerateLabel* label = static_cast<GenerateLabel*>($2);
+                Exp* exp = static_cast<Exp*>($3);
                 if(exp->type.type != BOOLTYPE){
                     output::errorMismatch(exp->type.lineno);
                     exit(0);
                 }
-                $$ = $1;
+
+                $$ = $3;
+                code_buffer.bpatch($1->next_list, $2->header_label);
+				$$->header_label = label->header_label;
+				int to_backpach = handle_bool_exp_jump(*exp);	// in this function we emit checking loop code.
+				$$->true_list = makelist({to_backpach,FIRST});
+				$$->false_list = makelist({to_backpach,SECOND});
+
             }
+GENLABEL: {
+            $$ = new GenerateLabel();
+			$$->header_label = code_buffer.genLabel();
+		  }
+
+MBranch: {
+                $$ = new MBranch();
+                $$->next_list = statement_manager.handle_bool_exp();
+         }
+
 IfOpen: {
             OpenScope();
         }
@@ -517,6 +625,8 @@ ElseOpen: {
 WhileOpen: {
             OpenScope();
             loopsCnt++;
+            break_next_lists->push_back(vector<pair<int,BranchLabelIndex>>());
+            cont_next_lists->push_back(vector<pair<int,BranchLabelIndex>>());
            }
 
 Call: ID LPAREN ExpList RPAREN {
@@ -533,7 +643,9 @@ Call: ID LPAREN ExpList RPAREN {
             output::errorPrototypeMismatch(yylineno, identifier->value, func_args);
             exit(0);
         }
+        FunctionManager function_manager = FunctionManager(func);
         $$ = new Call(type.type);
+        $$->reg = function_manager.handle_call(identifier->value, type.type, exp_list);
       }
 	  | ID LPAREN RPAREN {
         Identifier* identifier = static_cast<Identifier*>($1);
@@ -549,6 +661,8 @@ Call: ID LPAREN ExpList RPAREN {
             exit(0);
         }
         $$ = new Call(type.type);
+        FunctionManager function_manager = FunctionManager(func);
+        $$->reg = function_manager.handle_call(identifier->value, type.type);
       }
 ;
 
@@ -636,8 +750,7 @@ Exp:  LPAREN Exp RPAREN {
             exit(0);
 	    }
 	    $$ = new Exp(type.type, identifier->value, type.enum_id.value);
-
-	    $$->reg = handel_id_reg(identifier, type);
+	    $$->reg = handle_id_reg(identifier, type);
 	 }
 	 | Call	{
 	    Call* call = static_cast<Call*>($1);
@@ -661,7 +774,7 @@ Exp:  LPAREN Exp RPAREN {
 	 | STRING {
         StringToken* str = static_cast<StringToken*>($1);
 	    $$ = new Exp(STRINGTYPE);
-	    $$->reg = init_reg_string(str->token)
+	    $$->reg = init_reg_string(str->token);
 	 }
 	 | TRUE {
 	    $$ = new Exp(BOOLTYPE);
@@ -919,10 +1032,10 @@ int get_offset_from_id(Identifier to_find){
     return -1;
 }
 
-handel_id_reg(Identifier* identifier,Type type){
+string handle_id_reg(Identifier* identifier,Type type){
     int enum_offset = -2;
     for (Table table: (*scopes)){
-        if(table.contains(identifier)){
+        if(table.contains(*identifier)){
             enum_offset = table.getEnumOffset(*identifier);
         }
     }
@@ -930,6 +1043,6 @@ handel_id_reg(Identifier* identifier,Type type){
         return init_reg_enum(enum_offset);
     }
     else{
-        return set_var_from_reg(stack_pointer,get_offset_from_id(*identifier), exp->reg, exp->type.type);
+        return get_var_as_reg_from_stack(stack_pointer,get_offset_from_id(*identifier), type.type);
     }
 }

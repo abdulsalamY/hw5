@@ -6,6 +6,7 @@
 
 string init_local_vars_stack(){
     string stack_ptr = getReg();
+    code_buffer.emit("entry:");
     code_buffer.emit(stack_ptr + " = alloca [50 x i32]");
     return stack_ptr;
 }
@@ -27,7 +28,7 @@ string get_var_as_reg_from_stack(string stack_pointer, int off_set, TypeID type)
         code_buffer.emit(casted_var + " = trunc i32 " + var + " to i1");
     }
     else if (type == STRINGTYPE) {
-        //TODO fill
+        code_buffer.emit(casted_var + " = trunc i32 " + var + " to i8*");
     }
 
     return casted_var;

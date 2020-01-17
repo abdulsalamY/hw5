@@ -20,6 +20,7 @@ public:
     string reg;
     vector<pair<int,BranchLabelIndex>> true_list;
     vector<pair<int,BranchLabelIndex>> false_list;
+    vector<pair<int,BranchLabelIndex>> next_list;
     abstract_class():lineno(yylineno){}
 
 };

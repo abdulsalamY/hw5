@@ -10,18 +10,18 @@
 
 string handle_operation(string r1, string r2, string op_char, TypeID reg1_type, TypeID reg2_type){
     string type = "i32";
-    if(reg1_type == BYTETYPE || reg2_type == BYTETYPE){
+    if(reg1_type == BYTETYPE && reg2_type == BYTETYPE){
         type = "i8";
     }
     if(type == "i32"){
         if(reg1_type == BYTETYPE){
             string new_reg = getReg();
-            code_buffer.emit(new_reg + " = trunc i8 " + r1 + " to i32");
+            code_buffer.emit(new_reg + " = zext i8 " + r1 + " to i32");
             r1 = new_reg;
         }
         if(reg2_type == BYTETYPE){
             string new_reg = getReg();
-            code_buffer.emit(new_reg + " = trunc i8 " + r2 + " to i32");
+            code_buffer.emit(new_reg + " = zext i8 " + r2 + " to i32");
             r2 = new_reg;
         }
     }
@@ -102,8 +102,15 @@ string init_reg_enum(int enum_id) {
 string init_reg_string(const string& value) {
     string global_var_name = getGlobal();
     string ptr_reg = getReg();
-    string size = to_string(value.size()+2);
-    code_buffer.emitGlobal(global_var_name + " = constant [" + size + " x i8] c" + value + R"(\0A\00")");
-    code_buffer.emit(ptr_reg + " = getelementptr [" + size +" x i8], [" + size +" x i8]* %tramp, i32 0, i32 0");
+    string size = to_string(value.size()-1);
+    code_buffer.emitGlobal(global_var_name + " = constant [" + size + " x i8] c" + value.substr(0,value.size()-1) + "\\00\"");
+    code_buffer.emit(ptr_reg + " = getelementptr [" + size +" x i8], [" + size +" x i8]* " + global_var_name + ", i32 0, i32 0");
     return ptr_reg;
+}
+
+int handle_bool_exp_jump(Exp exp) {
+
+    string boolean_value = exp.reg;
+    return code_buffer.emit("br i1 " + boolean_value + ", label @, label @");
+
 }
