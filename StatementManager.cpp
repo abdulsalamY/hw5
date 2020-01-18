@@ -6,7 +6,7 @@
 #include <unordered_map>
 std::unordered_map<TypeID, std::string> typeId_to_type({
                                                      { INTTYPE, "i32" },
-                                                     { BYTETYPE, "i32" },
+                                                     {ENUMTYPE, "i32" },
                                                      { BYTETYPE, "i8" },
                                                      { BOOLTYPE, "i1" },
                                                      { STRINGTYPE, "i8*" },

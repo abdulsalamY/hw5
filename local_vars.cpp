@@ -3,11 +3,16 @@
 //
 
 #include "local_vars.hpp"
-
-string init_local_vars_stack(){
+string stack_size = "50";
+int formals_size = 0;
+string init_local_vars_stack(vector<Formal> formals){
     string stack_ptr = getReg();
-    code_buffer.emit("entry:");
-    code_buffer.emit(stack_ptr + " = alloca [50 x i32]");
+    stack_size = to_string(50 + formals.size());
+    formals_size = formals.size();
+    code_buffer.emit(stack_ptr + " = alloca [" + stack_size + " x i32]");
+    for (int i = 0; i < formals.size() ; ++i) {
+        set_var_from_reg(stack_ptr, i-formals_size, "%" + to_string(i), formals[i].type.type);
+    }
     return stack_ptr;
 }
 
@@ -16,7 +21,7 @@ string get_var_as_reg_from_stack(string stack_pointer, int off_set, TypeID type)
     string var_ptr = getReg();
     string var = getReg();
     string casted_var = getReg();
-    code_buffer.emit(var_ptr + "= getelementptr [50 x i32],[50 x i32]* "+ stack_pointer +", i32 0 , i32 " + to_string(off_set));
+    code_buffer.emit(var_ptr + "= getelementptr [" + stack_size + " x i32],[" + stack_size + " x i32]* "+ stack_pointer +", i32 0 , i32 " + to_string(off_set + formals_size));
     code_buffer.emit(var +  " = load i32, i32* "+ var_ptr );
     if (type == INTTYPE || type == ENUMTYPE) {
         return var;
@@ -37,7 +42,7 @@ string get_var_as_reg_from_stack(string stack_pointer, int off_set, TypeID type)
 void set_var(string stack_pointer, int off_set, int value){
 
     string var_ptr = getReg();
-    code_buffer.emit(var_ptr + "= getelementptr [50 x i32],[50 x i32]* "+ stack_pointer +", i32 0 , i32 " + to_string(off_set));
+    code_buffer.emit(var_ptr + "= getelementptr [" + stack_size + " x i32],[" + stack_size + " x i32]* "+ stack_pointer +", i32 0 , i32 " + to_string(off_set+formals_size));
     code_buffer.emit("store i32 "+ to_string(value) +", i32* " + var_ptr );
 }
 
@@ -45,7 +50,7 @@ void set_var_from_reg(string stack_pointer, int off_set, string reg_source, Type
 
     string var_ptr = getReg();
     string source_i32_reg = getReg();
-    if (type == INTTYPE) {
+    if (type == INTTYPE || type == ENUMTYPE) {
         source_i32_reg = reg_source;
     }
     else if (type == BYTETYPE) {
@@ -55,7 +60,7 @@ void set_var_from_reg(string stack_pointer, int off_set, string reg_source, Type
         code_buffer.emit(source_i32_reg + " = zext i1 " + reg_source + " to i32");
     }
 
-    code_buffer.emit(var_ptr + "= getelementptr [50 x i32],[50 x i32]* " + stack_pointer + ", i32 0 , i32 " + to_string(off_set));
+    code_buffer.emit(var_ptr + "= getelementptr [" + stack_size + " x i32],[" + stack_size + " x i32]* " + stack_pointer + ", i32 0 , i32 " + to_string(off_set+formals_size));
     code_buffer.emit("store i32 " + source_i32_reg + ", i32* " + var_ptr);
 }
 

@@ -22,18 +22,35 @@ abstract_class* BoolManager::handleOr(const string& reg) {
     string if_false_label = code_buffer.genLabel();
     code_buffer.bpatch(makelist({address,SECOND}),if_false_label);
     abstract_class->true_list.emplace_back(address,FIRST);
-    abstract_class->header_label = header_label;
-    abstract_class->inner_label = if_false_label;
     return abstract_class;
 }
 
 string BoolManager::handleOrSecond(abstract_class * abstractClass, string reg) {
-    int true_address = code_buffer.emit("br label @");
+    string cond_reg = getReg();
+    int header_address = code_buffer.emit("br label @");
+    string header_label = code_buffer.genLabel();
+    code_buffer.bpatch(makelist({header_address,FIRST}),header_label);
+    code_buffer.emit(cond_reg + " = icmp eq i1 1, " + reg);
+    int address = code_buffer.emit("br i1 " + cond_reg + ", label @, label @");
+    abstractClass->true_list.emplace_back(address,FIRST);
+    abstractClass->false_list.emplace_back(address,SECOND);
+
+    //if the exp is false we will jump to here:
+    string if_false_label = code_buffer.genLabel();
+    code_buffer.bpatch(abstractClass->false_list,if_false_label);
+    int from_false = code_buffer.emit("br label @");
+
+    //if the exp is true we will jump to here:
     string if_true_label = code_buffer.genLabel();
-    vector<pair<int,BranchLabelIndex>> true_list =code_buffer.merge(makelist({true_address, FIRST}),abstractClass->true_list);
-    code_buffer.bpatch(true_list, if_true_label);
+    code_buffer.bpatch(abstractClass->true_list,if_true_label);
+    int from_true = code_buffer.emit("br label @");
+
+    //if the prev block was "if_true" the result should be true.
+    string phi_label = code_buffer.genLabel();
+    code_buffer.bpatch(makelist({from_false,FIRST}), phi_label);
+    code_buffer.bpatch(makelist({from_true,FIRST}), phi_label);
     string result_reg = getReg();
-    code_buffer.emit(result_reg + " = phi i1 [ 1, %" + abstractClass->header_label + " ], [ " + reg + ", %" + abstractClass->inner_label + " ]");
+    code_buffer.emit(result_reg + " = phi i1 [ 1, %" + if_true_label + " ], [ 0, %" + if_false_label + " ]");
     return result_reg;
 }
 
@@ -48,18 +65,35 @@ abstract_class* BoolManager::handleAnd(const string& reg) {
     string if_false_label = code_buffer.genLabel();
     code_buffer.bpatch(makelist({address,SECOND}),if_false_label);
     abstract_class->true_list.emplace_back(address,FIRST);
-    abstract_class->header_label = header_label;
-    abstract_class->inner_label = if_false_label;
     return abstract_class;
 }
 
 string BoolManager::handleAndSecond(abstract_class * abstractClass, string reg) {
-    int true_address = code_buffer.emit("br label @");
+    string cond_reg = getReg();
+    int header_address = code_buffer.emit("br label @");
+    string header_label = code_buffer.genLabel();
+    code_buffer.bpatch(makelist({header_address,FIRST}),header_label);
+    code_buffer.emit(cond_reg + " = icmp eq i1 1, " + reg);
+    int address = code_buffer.emit("br i1 " + cond_reg + ", label @, label @");
+    abstractClass->true_list.emplace_back(address,FIRST);
+    abstractClass->false_list.emplace_back(address,SECOND);
+
+    //if the exp is false we will jump to here:
+    string if_false_label = code_buffer.genLabel();
+    code_buffer.bpatch(abstractClass->false_list,if_false_label);
+    int from_false = code_buffer.emit("br label @");
+
+    //if the exp is true we will jump to here:
     string if_true_label = code_buffer.genLabel();
-    vector<pair<int,BranchLabelIndex>> true_list =code_buffer.merge(makelist({true_address, FIRST}),abstractClass->true_list);
-    code_buffer.bpatch(true_list, if_true_label);
+    code_buffer.bpatch(abstractClass->true_list,if_true_label);
+    int from_true = code_buffer.emit("br label @");
+
+    //if the prev block was "if_true" the result should be true.
+    string phi_label = code_buffer.genLabel();
+    code_buffer.bpatch(makelist({from_false,FIRST}), phi_label);
+    code_buffer.bpatch(makelist({from_true,FIRST}), phi_label);
     string result_reg = getReg();
-    code_buffer.emit(result_reg + " = phi i1 [ 0, %" + abstractClass->header_label + " ], [ " + reg + ", %" + abstractClass->inner_label + " ]");
+    code_buffer.emit(result_reg + " = phi i1 [ 1, %" + if_true_label + " ], [ 0, %" + if_false_label + " ]");
     return result_reg;
 }
 

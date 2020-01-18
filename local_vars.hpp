@@ -10,7 +10,7 @@
 #include "handler.hpp"
 #include <string>
 
-string init_local_vars_stack();
+string init_local_vars_stack(vector<Formal> formals);
 
 string get_var_as_reg_from_stack(string stack_pointer, int off_set, TypeID type);
 

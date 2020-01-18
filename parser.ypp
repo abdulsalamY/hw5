@@ -32,7 +32,7 @@
     vector<vector<pair<int,BranchLabelIndex>>>* break_next_lists;
     vector<vector<pair<int,BranchLabelIndex>>>* cont_next_lists;
 	int loopsCnt;
-	abstract_class* global_abstract = new class abstract_class();
+	vector<abstract_class*> global_abstract = vector<abstract_class*>();
     string stack_pointer;
 
 
@@ -120,7 +120,14 @@ Funcs :	{
 		| FuncDecl Funcs{ }
 ;
 
-FuncDecl :  FuncDeclM Statements RBrace {}
+FuncDecl :  FuncDeclM Statements RBrace
+        {
+            FuncID* function_declaration = static_cast<FuncID*> ($1);
+            Statements* statements = static_cast<Statements*> ($2);
+            code_buffer.bpatch(function_declaration->next_list, statements->header_label);
+            FunctionManager function_manager = FunctionManager(*function_declaration);
+            function_manager.handle_close(statements->next_list);
+        }
 ;
 
 FuncDeclM : RetType ID LPAREN Formals RPAREN LBrace{
@@ -133,21 +140,25 @@ FuncDeclM : RetType ID LPAREN Formals RPAREN LBrace{
                 exit(0);
             }
         }
-				if(identifierDefined(*function_id)){
-					output::errorDef(function_id->lineno, function_id->value);
-					exit(0);
-				}
+        if(identifierDefined(*function_id)){
+            output::errorDef(function_id->lineno, function_id->value);
+            exit(0);
+        }
 
-				for( Formal curr : formals->formals){
-				    if(curr.id.value == function_id->value){
-				        output::errorDef(function_id->lineno, function_id->value);
-                    	exit(0);
-				    }
-				}
+        for( Formal curr : formals->formals){
+            if(curr.id.value == function_id->value){
+                output::errorDef(function_id->lineno, function_id->value);
+                exit(0);
+            }
+        }
 
         functions->push_back(FuncID(function_id->value, *retType, *formals));
         scopes->back().insertFormals(*formals);
-        stack_pointer = init_local_vars_stack();
+        FunctionManager function_manager = FunctionManager(FuncID(function_id->value, *retType, *formals));
+        function_manager.handle_declaration();
+        stack_pointer = init_local_vars_stack(formals->formals);
+        $$ = new FuncID(function_id->value, *retType, *formals);
+        $$->next_list = makelist({code_buffer.emit("br label @"),FIRST});
         }
 
 LBrace: LBRACE {
@@ -799,33 +810,35 @@ Exp:  LPAREN Exp RPAREN {
                         output::errorMismatch(exp1->lineno);
                         exit(0);
                     }
-                    global_abstract = bool_manager.handleAnd(exp1->reg);
+                    global_abstract.push_back(bool_manager.handleAnd(exp1->reg));
                }
         Exp {
-             Exp* exp2 = static_cast<Exp*>($1);
+             Exp* exp2 = static_cast<Exp*>($4);
                if(exp2->type.type != BOOLTYPE){
                    output::errorMismatch(exp2->lineno);
                    exit(0);
                }
              $$ = new Exp(BOOLTYPE);
-             $$->reg = bool_manager.handleAndSecond(global_abstract,exp2->reg);
+             $$->reg = bool_manager.handleAndSecond(global_abstract.back(),exp2->reg);
+             global_abstract.pop_back();
          }
 	 | Exp OR {
-                         Exp* exp1 = static_cast<Exp*>($1);
-                         if(exp1->type.type != BOOLTYPE){
-                             output::errorMismatch(exp1->lineno);
-                             exit(0);
-                         }
-                         global_abstract = bool_manager.handleOr(exp1->reg);
+                 Exp* exp1 = static_cast<Exp*>($1);
+                 if(exp1->type.type != BOOLTYPE){
+                     output::errorMismatch(exp1->lineno);
+                     exit(0);
+                 }
+                 global_abstract.push_back(bool_manager.handleOr(exp1->reg));
             }
      Exp {
-             Exp* exp2 = static_cast<Exp*>($1);
+             Exp* exp2 = static_cast<Exp*>($4);
                if(exp2->type.type != BOOLTYPE){
                    output::errorMismatch(exp2->lineno);
                    exit(0);
-               }
+                }
              $$ = new Exp(BOOLTYPE);
-             $$->reg = bool_manager.handleOrSecond(global_abstract,exp2->reg);
+             $$->reg = bool_manager.handleOrSecond(global_abstract.back(),exp2->reg);
+             global_abstract.pop_back();
        }
 	 | Exp RELATIONAL Exp {
           Exp* exp1 = static_cast<Exp*>($1);

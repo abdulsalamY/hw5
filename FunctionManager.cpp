@@ -6,6 +6,8 @@
 #include <sstream>
 extern std::unordered_map<TypeID, std::string> typeId_to_type;
 
+FunctionManager::FunctionManager(FuncID func):function(func.func_name, func.ret_type, func.formals) {}
+
 string FunctionManager::handle_call(string function_name, TypeID ret_type) {
     std::stringstream call_stream;
     string return_res;
@@ -49,4 +51,28 @@ string FunctionManager::handle_call(string function_name, TypeID ret_type, ExpLi
     return return_res;
 }
 
-FunctionManager::FunctionManager(FuncID func):function(func.func_name, func.ret_type, func.formals) {}
+void FunctionManager::handle_declaration() {
+    std::stringstream declaration_stream;
+    std::stringstream formals_stream;
+    declaration_stream << "define " + typeId_to_type[this->function.ret_type.type] + " @" + this->function.func_name;
+    for (Formal formal: this->function.formals.formals) {
+        formals_stream << typeId_to_type[formal.type.type] + ", " ;
+    }
+    string formals = formals_stream.str();
+    formals = (formals.empty()) ? "" : formals.substr(0,formals.size()-2);
+    declaration_stream << "(" + formals + ") {";
+    code_buffer.emit(declaration_stream.str());
+    code_buffer.emit("entry:");
+}
+
+void FunctionManager::handle_close(vector<pair<int,BranchLabelIndex>> next_list) {
+    string closing_label = code_buffer.genLabel();
+    code_buffer.bpatch(next_list,closing_label);
+    if(this->function.ret_type.type != VOIDTYPE){
+        code_buffer.emit("ret " + typeId_to_type[this->function.ret_type.type] + " 0");
+    }
+    else {
+        code_buffer.emit("ret void");
+    }
+    code_buffer.emit("}");
+}

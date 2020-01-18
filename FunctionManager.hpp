@@ -21,6 +21,8 @@ public:
     explicit FunctionManager(FuncID func);
     string handle_call(string function_name, TypeID ret_type);
     string handle_call(string function_name, TypeID ret_type, ExpList* exp_list);
+    void handle_declaration();
+    void handle_close(vector<pair<int,BranchLabelIndex>>);
 };
 
 
