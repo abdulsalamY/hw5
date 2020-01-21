@@ -11,7 +11,7 @@ string init_local_vars_stack(vector<Formal> formals){
     formals_size = formals.size();
     code_buffer.emit(stack_ptr + " = alloca [" + stack_size + " x i32]");
     for (int i = 0; i < formals.size() ; ++i) {
-        set_var_from_reg(stack_ptr, i-formals_size, "%" + to_string(i), formals[i].type.type);
+        set_var_from_reg(stack_ptr, -(i+1), "%" + to_string(i), formals[i].type.type);
     }
     return stack_ptr;
 }

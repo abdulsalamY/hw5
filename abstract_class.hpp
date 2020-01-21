@@ -14,6 +14,7 @@ using namespace std;
 class abstract_class{
 public:
     int lineno;
+    int line_to_fill;
     string header_label;
     string inner_label;
     string token;

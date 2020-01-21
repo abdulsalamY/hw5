@@ -39,7 +39,7 @@ string FunctionManager::handle_call(string function_name, TypeID ret_type, ExpLi
     for (int i = 1; i < exp_list->exp_list.size() ; ++i) {
         if(exp_list->exp_list[i].type.type == BYTETYPE && this->function.formals.formals[i].type.type == INTTYPE){
             trunc_reg = getReg();
-            code_buffer.emit(trunc_reg + " = trunc i8 " + exp_list->exp_list[i].reg + " to i32");
+            code_buffer.emit(trunc_reg + " = zext i8 " + exp_list->exp_list[i].reg + " to i32");
             exp_list_stream << ", i32 " + trunc_reg;
         }
         else{

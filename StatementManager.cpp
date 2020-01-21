@@ -31,11 +31,16 @@ StatementManager::handle_statement() {
     return makelist({address,FIRST});
 }
 
-void StatementManager::handle_return(string reg, TypeID type) {
-    if(reg == ""){
-        code_buffer.emit("ret " + typeId_to_type[type]);
+void StatementManager::handle_return(string reg, TypeID ret_type, TypeID reg_type) {
+    if(reg.empty()){
+        code_buffer.emit("ret " + typeId_to_type[ret_type]);
     }else {
-        code_buffer.emit("ret " + typeId_to_type[type] + " " + reg);
+        string result_reg = reg;
+        if(reg_type != ret_type){
+            result_reg = getReg();
+            code_buffer.emit(result_reg + " = zext i8 " + reg + " to i32");
+        }
+        code_buffer.emit("ret " + typeId_to_type[ret_type] + " " + result_reg);
     }
 }
 

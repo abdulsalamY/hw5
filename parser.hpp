@@ -360,6 +360,10 @@ public:
 
 class GenerateLabel: public abstract_class{
 };
+
+class agile_operation: public abstract_class{
+};
+
 class Statement: public abstract_class{
 };
 class Statements: public abstract_class{

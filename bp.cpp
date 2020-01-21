@@ -28,11 +28,15 @@ int CodeBuffer::emit(const string &s){
 	return buffer.size() - 1;
 }
 
-void CodeBuffer::bpatch(const vector<pair<int,BranchLabelIndex>>& address_list, const std::string &label){
+void CodeBuffer::bpatch(const vector<pair<int,BranchLabelIndex>>& address_list, const std::string &label, const bool is_hacked){
     for(vector<pair<int,BranchLabelIndex>>::const_iterator i = address_list.begin(); i != address_list.end(); i++){
     	int address = (*i).first;
     	BranchLabelIndex labelIndex = (*i).second;
-		replace(buffer[address], "@", "%" + label, labelIndex);
+    	if(!is_hacked){
+            replace(buffer[address], "@", "%" + label, labelIndex);
+        } else{
+            replace(buffer[address], "@", label, labelIndex);
+        }
     }
 }
 

@@ -7,6 +7,7 @@
 
 #include "bp.hpp"
 #include "parser.hpp"
+#include "RegisterManager.hpp"
 #define getReg() RegisterManager::getReg()
 #define code_buffer CodeBuffer::instance()
 #define makelist CodeBuffer::makelist
@@ -16,7 +17,7 @@ public:
     static StatementManager &instance();
     vector<pair<int,BranchLabelIndex>> handle_statements(string header_label,vector<pair<int,BranchLabelIndex>> statements_next_list);
     vector<pair<int,BranchLabelIndex>> handle_statement();
-    void handle_return(string reg,TypeID type);
+    void handle_return(string reg,TypeID ret_type, TypeID reg_type);
     vector<pair<int,BranchLabelIndex>> handle_bool_exp();
 };
 

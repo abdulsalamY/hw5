@@ -48,7 +48,19 @@ string handle_operation(string r1, string r2, string op_char, TypeID reg1_type, 
             code_buffer.emit("call void @error_division_by_zero()");
             int stam_location = code_buffer.emit("br label @");
             string continue_label = code_buffer.genLabel();
-            code_buffer.emit(res + " = sdiv " + type + " " + r1 + ", " + r2);
+            if(type == "i32"){
+                code_buffer.emit(res + " = sdiv " + type + " " + r1 + ", " + r2);
+            }else{
+                string new_reg = getReg();
+                code_buffer.emit(new_reg + " = zext i8 " + r1 + " to i32");
+                r1 = new_reg;
+                new_reg = getReg();
+                code_buffer.emit(new_reg + " = zext i8 " + r2 + " to i32");
+                r2 = new_reg;
+                new_reg =getReg();
+                code_buffer.emit(new_reg + " = sdiv i32 " + r1 + ", " + r2);
+                code_buffer.emit(res + " = trunc i32 " + new_reg + " to i8");
+            }
             code_buffer.bpatch(code_buffer.makelist({location, SECOND}), continue_label);
             code_buffer.bpatch(code_buffer.makelist({location, FIRST}), error_label);
             code_buffer.bpatch(code_buffer.makelist({stam_location, FIRST}), continue_label);

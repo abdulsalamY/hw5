@@ -1,9 +1,10 @@
 #!/bin/bash
 
-for file in `ls final_tests/ | grep in | cut -d"." -f1`; do
+for file in `ls tests/ | grep in | cut -d"." -f1`; do
 	echo Running test for $file
-	./hw5 < final_tests/${file}.in > final_tests/${file}
-	diff final_tests/$file final_tests/${file}.out
+	./hw5 < tests/${file}.in > tests/${file}.llvm
+   lli < tests/${file}.llvm > tests/${file}.res
+	diff tests/$file.res tests/${file}.out
  	if [[ $? != 0 ]] 
 		then
 		echo "Failed test #"$i"!" 

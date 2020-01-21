@@ -31,6 +31,7 @@
 	vector<Table>* scopes;
     vector<vector<pair<int,BranchLabelIndex>>>* break_next_lists;
     vector<vector<pair<int,BranchLabelIndex>>>* cont_next_lists;
+    TypeID global_ret_type = VOIDTYPE;
 	int loopsCnt;
 	vector<abstract_class*> global_abstract = vector<abstract_class*>();
     string stack_pointer;
@@ -159,6 +160,7 @@ FuncDeclM : RetType ID LPAREN Formals RPAREN LBrace{
         stack_pointer = init_local_vars_stack(formals->formals);
         $$ = new FuncID(function_id->value, *retType, *formals);
         $$->next_list = makelist({code_buffer.emit("br label @"),FIRST});
+        global_ret_type = retType->type;
         }
 
 LBrace: LBRACE {
@@ -323,12 +325,15 @@ Statements: GENLABEL Statement
 ;
 
 
-Statement: LBrace Statements RBrace {
-                Statements* statements = static_cast<Statements*>($2);
+Statement: LBrace M_new_scope Statements RBrace {
+                abstract_class* new_scope = static_cast<abstract_class*>($2);
+                Statements* statements = static_cast<Statements*>($3);
                 $$ = new Statement();
                 $$->next_list = statements->next_list;
                 $$->header_label = statements->header_label;
+                code_buffer.bpatch(new_scope->next_list, statements->header_label);
             }
+
 			| Type ID SC {
 			    Type* type = static_cast<Type*>($1);
 			    Identifier* identifier = static_cast<Identifier*>($2);
@@ -510,7 +515,7 @@ Statement: LBrace Statements RBrace {
                     exit(0);
 			    }
 			    $$ = new Statement();
-			    statement_manager.handle_return("", VOIDTYPE);
+			    statement_manager.handle_return("", VOIDTYPE, VOIDTYPE);
 			}
 
 			| RETURN Exp SC {
@@ -522,14 +527,25 @@ Statement: LBrace Statements RBrace {
                     exit(0);
 			    }
                 $$ = new Statement();
-                statement_manager.handle_return(exp->reg, exp->type.type);
+                statement_manager.handle_return(exp->reg, global_ret_type, exp->type.type);
 			}
 
-			| IF LPAREN BoolExp RPAREN IfOpen Statement  {
+			| IF LPAREN BoolExp RPAREN IfOpen AGILE Statement  {
                 printScope();
 			    CloseScope();
 			    Exp* bool_exp = static_cast<Exp*>($3);
-				Statement* stat_to_execute = static_cast<Statement*>($6);
+                agile_operation* agile_op =  static_cast<agile_operation*>($6);
+				Statement* stat_to_execute = static_cast<Statement*>($7);
+
+                if(stat_to_execute->header_label == ""){
+                    string stam_label = getReg();
+                    stam_label[0]='L';
+                    code_buffer.bpatch(makelist({agile_op->line_to_fill,FIRST}), stam_label + ":", true);
+                    stat_to_execute->header_label = (stam_label);
+                    stat_to_execute->next_list = merge(stat_to_execute->next_list, makelist({code_buffer.emit("br label @"),FIRST}));
+                }else{
+                    code_buffer.bpatch(makelist({agile_op->line_to_fill,FIRST}), "br label %"+ stat_to_execute->header_label,true);
+                }
 
                 $$ = new Statement();
 
@@ -537,12 +553,34 @@ Statement: LBrace Statements RBrace {
 				$$->next_list = merge(bool_exp->false_list , stat_to_execute->next_list);
 
 			}
-			| IF LPAREN BoolExp RPAREN IfOpen Statement ELSE IfClose ElseOpen Statement {
+			| IF LPAREN BoolExp RPAREN IfOpen AGILE Statement ELSE IfClose ElseOpen AGILE Statement {
                 printScope();
 			    CloseScope();
 				Exp* bool_exp = static_cast<Exp*>($3);
-				Statement* stat_to_execute = static_cast<Statement*>($6);
-				Statement* else_to_execute = static_cast<Statement*>($10);
+                abstract_class* if_close =  static_cast<abstract_class*>($9);
+                agile_operation* agile_op1 =  static_cast<agile_operation*>($6);
+				Statement* stat_to_execute = static_cast<Statement*>($7);
+                agile_operation* agile_op2 =  static_cast<agile_operation*>($11);
+				Statement* else_to_execute = static_cast<Statement*>($12);
+
+                if(stat_to_execute->header_label == ""){
+                    string stam_label = getReg();
+                    stam_label[0]='L';
+                    code_buffer.bpatch(makelist({agile_op1->line_to_fill,FIRST}), stam_label + ":", true);
+                    stat_to_execute->header_label = ( stam_label);
+                }else{
+                    code_buffer.bpatch(makelist({agile_op1->line_to_fill,FIRST}), "br label %"+ stat_to_execute->header_label, true);
+                }
+                stat_to_execute->next_list = merge(stat_to_execute->next_list, makelist({if_close->line_to_fill,FIRST}));
+                if(else_to_execute->header_label == ""){
+                    string stam_label = getReg();
+                    stam_label[0]='L';
+                    code_buffer.bpatch(makelist({agile_op2->line_to_fill,FIRST}), stam_label + ":", true);
+                    else_to_execute->header_label = ( stam_label);
+                    else_to_execute->next_list = merge(stat_to_execute->next_list, makelist({code_buffer.emit("br label @"),FIRST}));
+                }else{
+                    code_buffer.bpatch(makelist({agile_op2->line_to_fill,FIRST}), "br label %"+ else_to_execute->header_label, true);
+                }
 
 				$$ = new Statement();
 
@@ -552,13 +590,24 @@ Statement: LBrace Statements RBrace {
 
 			}
 
-			| WHILE LPAREN BoolExp RPAREN WhileOpen Statement {
+			| WHILE LPAREN BoolExp RPAREN WhileOpen AGILE Statement {
 
 				Exp* bool_exp = static_cast<Exp*>($3);
-				Statement* stat_to_execute = static_cast<Statement*>($6);
+				agile_operation* agile_op =  static_cast<agile_operation*>($6);
+				Statement* stat_to_execute = static_cast<Statement*>($7);
 			    printScope();
 			    CloseScope();
 			    loopsCnt--;
+
+                if(stat_to_execute->header_label == ""){
+                    string stam_label = getReg();
+                    stam_label[0]='L';
+                    code_buffer.bpatch(makelist({agile_op->line_to_fill,FIRST}), stam_label + ":", true);
+                    stat_to_execute->header_label = ( stam_label);
+                    stat_to_execute->next_list = merge(stat_to_execute->next_list, makelist({code_buffer.emit("br label @"),FIRST}));
+                }else{
+                    code_buffer.bpatch(makelist({agile_op->line_to_fill,FIRST}), "br label %"+ stat_to_execute->header_label,true);
+                }
 
                 $$ = new Statement();
 
@@ -610,9 +659,15 @@ BoolExp: MBranch GENLABEL Exp {
 				$$->false_list = makelist({to_backpach,SECOND});
 
             }
+
 GENLABEL: {
             $$ = new GenerateLabel();
 			$$->header_label = code_buffer.genLabel();
+		  }
+
+AGILE: {
+            $$ = new agile_operation();
+            $$->line_to_fill = code_buffer.emit("@");
 		  }
 
 MBranch: {
@@ -625,6 +680,8 @@ IfOpen: {
         }
 
 IfClose: {
+            $$ = new abstract_class();
+            $$->line_to_fill = code_buffer.emit("br label @");
             printScope();
             CloseScope();
         }
@@ -875,7 +932,11 @@ Exp:  LPAREN Exp RPAREN {
 	 }
 ;
 
-
+M_new_scope: {
+                $$ = new abstract_class();
+                $$->next_list = makelist({code_buffer.emit("br label @"),FIRST});
+            }
+;
 
 %%
 

@@ -73,7 +73,7 @@ string BoolManager::handleAndSecond(abstract_class * abstractClass, string reg) 
     int header_address = code_buffer.emit("br label @");
     string header_label = code_buffer.genLabel();
     code_buffer.bpatch(makelist({header_address,FIRST}),header_label);
-    code_buffer.emit(cond_reg + " = icmp eq i1 1, " + reg);
+    code_buffer.emit(cond_reg + " = icmp eq i1 0, " + reg);
     int address = code_buffer.emit("br i1 " + cond_reg + ", label @, label @");
     abstractClass->true_list.emplace_back(address,FIRST);
     abstractClass->false_list.emplace_back(address,SECOND);
@@ -93,7 +93,7 @@ string BoolManager::handleAndSecond(abstract_class * abstractClass, string reg) 
     code_buffer.bpatch(makelist({from_false,FIRST}), phi_label);
     code_buffer.bpatch(makelist({from_true,FIRST}), phi_label);
     string result_reg = getReg();
-    code_buffer.emit(result_reg + " = phi i1 [ 1, %" + if_true_label + " ], [ 0, %" + if_false_label + " ]");
+    code_buffer.emit(result_reg + " = phi i1 [ 0, %" + if_true_label + " ], [ 1, %" + if_false_label + " ]");
     return result_reg;
 }
 
